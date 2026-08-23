@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, Sparkles, Share2 } from 'lucide-react';
+import { ChevronDown, Sparkles, Share2, CloudRain } from 'lucide-react';
 import { PHOTOS_POR_ALERTA, MODEL_NAME } from '../../lib/constants';
 import { makeT, humanize, type Lang } from '../../lib/translations';
 import type { DecisionResponse, Calibracion, AsignacionRed } from '../../lib/types';
@@ -107,6 +107,20 @@ export default function DecisionTab({ lang, lastResponse, offline, logEntries, c
                       {tr('red.requested')} {asignacionRed.porcentaje_apertura_deseado}% · {tr('red.assigned')} {asignacionRed.porcentaje_apertura_asignado}%
                     </motion.div>
                   )}
+                {lastResponse?.ventana_riego && lastResponse.ventana_riego.recomendacion !== 'sin_pronostico' && !offline && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.1 }}
+                    title={lastResponse.ventana_riego.motivo}
+                    className="inline-flex items-center gap-1.5 text-[11px] text-[#5aa8c9] bg-[#5aa8c9]/10 px-2.5 py-1 rounded-full"
+                  >
+                    <CloudRain size={11} />
+                    {lastResponse.ventana_riego.recomendacion === 'esperar_lluvia'
+                      ? tr('forecast.wait', lastResponse.ventana_riego.horas_hasta_lluvia ?? 0)
+                      : tr('forecast.now')}
+                  </motion.div>
+                )}
               </div>
 
               <blockquote className={`text-sm leading-relaxed border-l-2 pl-4 ${offline ? 'italic text-[#b8791f] border-[#b8791f]/40' : 'text-white/70 border-white/10'}`}>

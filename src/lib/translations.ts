@@ -200,6 +200,10 @@ const dict = {
     'red.assigned': 'Asignado por la red',
     'red.refresh': 'Actualizar',
 
+    // Ventana de riego con pronóstico
+    'forecast.wait': (h: number) => `Lluvia en ~${h}h · mejor esperar`,
+    'forecast.now': 'Sin lluvia próxima · buena ventana para regar',
+
     // Historial
     'hist.title': 'Historial real (todas tus sesiones)',
     'hist.refresh': 'Actualizar',
@@ -428,6 +432,10 @@ const dict = {
     'red.requested': 'Requested',
     'red.assigned': 'Assigned by the network',
     'red.refresh': 'Refresh',
+
+    // Forecast-aware irrigation window
+    'forecast.wait': (h: number) => `Rain in ~${h}h · better to wait`,
+    'forecast.now': 'No rain expected soon · good window to irrigate',
 
     'hist.title': 'Real history (all your sessions)',
     'hist.refresh': 'Refresh',

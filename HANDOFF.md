@@ -98,18 +98,10 @@ RLS está activado en las tres. La política de `Calibracion` funciona bien
 (nunca se probó lectura desde el cliente ahí, solo n8n con service_role). La
 política de `RedParcelas` **es la pieza pendiente** — ver siguiente sección.
 
-## 🔴 Pendiente inmediato: RLS de `RedParcelas` no deja leer ni al dueño
+## ✅ Resuelto (23 agosto 2026): RLS de `RedParcelas`
 
-Confirmado con una sesión de navegador genuina (JWT válido, `user_id`
-coincide exacto, no vencido): un `SELECT` a `RedParcelas` filtrado por
-`user_id=eq.<mismo user>` devuelve `200 []` — array vacío — aunque el
-Table Editor de Supabase sí muestra las filas reales para ese usuario.
-Esto casi seguro significa que la política RLS nunca se creó bien (RLS
-activado + cero políticas = bloquea todo, hasta al dueño).
-
-**Siguiente paso al retomar:** pedirle al usuario que corra esto en el SQL
-Editor de Supabase, y luego volver a probar leyendo desde el dashboard (o
-con curl usando el `access_token` de una cuenta de prueba):
+Causa: RLS activado en la tabla sin política efectiva (bloqueaba hasta al
+dueño). Se corrió en el SQL Editor de Supabase:
 
 ```sql
 drop policy if exists "cada quien ve y comparte su propia lectura" on "RedParcelas";
@@ -117,12 +109,17 @@ create policy "cada quien ve y comparte su propia lectura" on "RedParcelas"
   for all using (auth.uid() = user_id);
 ```
 
-Después de eso, verificar en el dashboard: pestaña "Red de Parcelas" debería
-mostrar "Tu asignación en la red" con datos reales, y la pestaña "Decisión"
-debería mostrar el badge azul "Solicitado X% · Asignado por la red Y%"
-cuando difieran (ya hay datos de prueba reales en la tabla que deberían
-aparecer apenas se arregle la política: una fila con 100% asignado de 90%
-solicitado, y otra con 20% asignado de 90% solicitado).
+Verificado end-to-end:
+- `curl` con `access_token` real de `claude.verify.20260823@mailinator.com`
+  → el `SELECT` ahora devuelve las 4 filas del dueño (antes `[]`).
+- Dashboard local, pestaña "Red de Parcelas" → "Tu asignación en la red"
+  muestra Solicitado 90% / Asignado 100%, con el motivo real de la red.
+- Dashboard local, pestaña "Decisión" (tras correr un análisis real) →
+  aparece el badge azul "Solicitado 90% · Asignado por la red 100%" junto
+  con el badge morado de auto-calibración ("Calibrado para esta parcela ·
+  Kc ×1.08 · 4 lecturas") en la misma tarjeta de decisión.
+
+Innovación 2 (coordinación multi-parcela) queda **completa**.
 
 ## Qué se construyó esta sesión (resumen)
 
@@ -141,8 +138,31 @@ Parcelas" y el badge en Decisión no van a mostrar datos aunque todo lo demás
 funcione.
 
 ### Innovación 3 — Ventana de riego con pronóstico
-**No empezada.** Se discutió como idea pero se priorizaron las otras dos
-primero. Diseño pendiente de hacer si se retoma.
+**Completa y verificada end-to-end en producción real (23 agosto 2026).**
+Usa Open-Meteo (gratis, sin API key) con el `lat`/`lon` que ya recolectaba
+el dashboard. Nodo nuevo `Pronostico Open-Meteo` en el workflow
+`Agente de estrés hidrico`, insertado en la conexión `NASA Power` →
+`Leer calibración`. `Aplicar valores por defecto` arma un resumen
+(`horas_hasta_lluvia`, `probabilidad_max_24h`) vía `$('Pronostico
+Open-Meteo')` explícito (igual patrón que `calibracion`). `PromptBuilder`
+lo agrega al prompt de Claude y pide un campo nuevo `ventana_riego`
+(`recomendacion`, `horas_hasta_lluvia`, `probabilidad_pct`, `motivo`) en
+el JSON de respuesta — pasa intacto por `Calculos` sin necesidad de tocar
+nada más abajo en la cadena.
+
+Verificado con curl (San Carlos, lat 10.32/lon -84.43, lluvia real al
+100% de probabilidad en 0h): con estrés no severo, Claude decidió
+**CERRAR la válvula** ("Esperar lluvia pronosticada...") citando el
+pronóstico como factor de peso ALTO — cambio real de comportamiento, no
+solo metadata. Dashboard: badge celeste "Lluvia en ~Xh · mejor esperar"
+o "Sin lluvia próxima · buena ventana para regar" en la pestaña Decisión,
+junto a los badges de calibración y red.
+
+Bugs encontrados y arreglados durante la implementación (ver también
+"Errores recurrentes" abajo): el bloque `pronosticoTexto` se calculaba
+bien pero no se agregó a la concatenación final del `prompt` (variable
+computada y nunca usada); y faltaba una coma entre `ventana_riego` y
+`dias_sin_intervencion` en el texto del esquema JSON mostrado a Claude.
 
 ### Bug real arreglado: análisis de imagen de dron
 El nodo "Respond to Webhook" en `Analisis de imagen` tenía `JSON.stringify()`

@@ -24,6 +24,15 @@ export interface RazonamientoItem {
   analisis: string;
 }
 
+export type VentanaRecomendacion = 'regar_ahora' | 'esperar_lluvia' | 'sin_pronostico';
+
+export interface VentanaRiego {
+  recomendacion: VentanaRecomendacion;
+  horas_hasta_lluvia: number | null;
+  probabilidad_pct: number | null;
+  motivo: string;
+}
+
 export interface DecisionResponse {
   valvula: 'ABIERTA' | 'CERRADA';
   porcentaje_apertura?: number;
@@ -39,6 +48,7 @@ export interface DecisionResponse {
   etc_mm?: number;
   taw_total_mm?: number;
   timestamp?: string;
+  ventana_riego?: VentanaRiego;
 }
 
 export interface LogEntry {
