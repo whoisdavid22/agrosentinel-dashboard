@@ -46,10 +46,11 @@ export interface ForecastPoint {
   color: string;
 }
 
+export type RiskEventKind = 'leve' | 'critico' | 'criticoActivo' | 'review';
+
 export interface RiskEvent {
-  label: string;
-  time: string;
-  desc: string;
+  kind: RiskEventKind;
+  when: number | 'now' | '24h'; // number = days from now
   color: string;
 }
 
@@ -91,15 +92,15 @@ export function computePredictions(
     const daysToLeve = hum > 40 ? Math.round((hum - 40) / etRate) : 0;
     const daysToCrit = diasCriticos;
     if (daysToLeve > 0) {
-      events.push({ label: 'Inicio estrés leve', time: `En ${daysToLeve} días`, desc: 'Humedad proyectada: 40%', color: '#b8791f' });
+      events.push({ kind: 'leve', when: daysToLeve, color: '#b8791f' });
     }
     if (daysToCrit > 0) {
-      events.push({ label: 'Estrés crítico', time: `En ${daysToCrit} días`, desc: 'Humedad por debajo del umbral del 25%', color: '#b23a2c' });
+      events.push({ kind: 'critico', when: daysToCrit, color: '#b23a2c' });
     }
   } else {
-    events.push({ label: 'Estrés crítico activo', time: 'Ahora', desc: 'Se requiere intervención inmediata', color: '#b23a2c' });
+    events.push({ kind: 'criticoActivo', when: 'now', color: '#b23a2c' });
   }
-  events.push({ label: 'Revisión recomendada', time: 'En 24 horas', desc: 'Verificar condiciones del cultivo', color: '#2d6e8f' });
+  events.push({ kind: 'review', when: '24h', color: '#2d6e8f' });
 
   return { diasCriticos, diasCriticosCritical: diasCriticos <= 1, humIn24, forecast, events };
 }

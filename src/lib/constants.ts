@@ -53,43 +53,71 @@ export const ROOT_TABLE: Record<string, number> = {
   maduracion: 0.7,
 };
 
-export const CULTIVOS = [
-  { value: 'generico', label: 'Genérico (hortaliza/hilera)' },
-  { value: 'cafe', label: 'Café' },
-  { value: 'frijol', label: 'Frijol' },
-  { value: 'tomate', label: 'Tomate' },
-  { value: 'chile', label: 'Chile dulce' },
-  { value: 'maiz', label: 'Maíz' },
-];
+import type { Lang } from './translations';
 
-export const ETAPAS = [
-  { value: 'germinacion', label: 'Germinación / establecimiento' },
-  { value: 'vegetativo', label: 'Crecimiento vegetativo' },
-  { value: 'floracion', label: 'Floración' },
-  { value: 'fructificacion', label: 'Fructificación / llenado' },
-  { value: 'maduracion', label: 'Maduración / cosecha' },
-];
+export const CULTIVOS: Record<Lang, { value: string; label: string }[]> = {
+  es: [
+    { value: 'generico', label: 'Genérico (hortaliza/hilera)' },
+    { value: 'cafe', label: 'Café' },
+    { value: 'frijol', label: 'Frijol' },
+    { value: 'tomate', label: 'Tomate' },
+    { value: 'chile', label: 'Chile dulce' },
+    { value: 'maiz', label: 'Maíz' },
+  ],
+  en: [
+    { value: 'generico', label: 'Generic (vegetable/row crop)' },
+    { value: 'cafe', label: 'Coffee' },
+    { value: 'frijol', label: 'Beans' },
+    { value: 'tomate', label: 'Tomato' },
+    { value: 'chile', label: 'Bell pepper' },
+    { value: 'maiz', label: 'Corn' },
+  ],
+};
 
-export const SUELOS = [
-  { value: 'arenoso', label: 'Arenoso' },
-  { value: 'franco_arenoso', label: 'Franco-arenoso' },
-  { value: 'franco', label: 'Franco' },
-  { value: 'franco_arcilloso', label: 'Franco-arcilloso' },
-  { value: 'arcilloso', label: 'Arcilloso' },
-];
+export const ETAPAS: Record<Lang, { value: string; label: string }[]> = {
+  es: [
+    { value: 'germinacion', label: 'Germinación / establecimiento' },
+    { value: 'vegetativo', label: 'Crecimiento vegetativo' },
+    { value: 'floracion', label: 'Floración' },
+    { value: 'fructificacion', label: 'Fructificación / llenado' },
+    { value: 'maduracion', label: 'Maduración / cosecha' },
+  ],
+  en: [
+    { value: 'germinacion', label: 'Germination / establishment' },
+    { value: 'vegetativo', label: 'Vegetative growth' },
+    { value: 'floracion', label: 'Flowering' },
+    { value: 'fructificacion', label: 'Fruiting / fill' },
+    { value: 'maduracion', label: 'Maturation / harvest' },
+  ],
+};
 
-export const PHOTOS_POR_ALERTA: Record<string, { url: string; label: string }> = {
-  NORMAL: {
-    url: 'https://images.unsplash.com/photo-1782087972248-82af30050866?fm=jpg&q=70&w=1200&auto=format&fit=crop',
-    label: 'Cultivo saludable',
+export const SUELOS: Record<Lang, { value: string; label: string }[]> = {
+  es: [
+    { value: 'arenoso', label: 'Arenoso' },
+    { value: 'franco_arenoso', label: 'Franco-arenoso' },
+    { value: 'franco', label: 'Franco' },
+    { value: 'franco_arcilloso', label: 'Franco-arcilloso' },
+    { value: 'arcilloso', label: 'Arcilloso' },
+  ],
+  en: [
+    { value: 'arenoso', label: 'Sandy' },
+    { value: 'franco_arenoso', label: 'Sandy loam' },
+    { value: 'franco', label: 'Loam' },
+    { value: 'franco_arcilloso', label: 'Clay loam' },
+    { value: 'arcilloso', label: 'Clay' },
+  ],
+};
+
+export const PHOTOS_POR_ALERTA: Record<Lang, Record<string, { url: string; label: string }>> = {
+  es: {
+    NORMAL: { url: 'https://images.unsplash.com/photo-1782087972248-82af30050866?fm=jpg&q=70&w=1200&auto=format&fit=crop', label: 'Cultivo saludable' },
+    LEVE: { url: 'https://images.unsplash.com/photo-1783932751325-2f833a1e7101?fm=jpg&q=70&w=1200&auto=format&fit=crop', label: 'Estrés hídrico leve' },
+    SEVERO: { url: 'https://images.unsplash.com/photo-1747122450139-6363248ec01f?fm=jpg&q=70&w=1200&auto=format&fit=crop', label: 'Estrés hídrico severo' },
   },
-  LEVE: {
-    url: 'https://images.unsplash.com/photo-1783932751325-2f833a1e7101?fm=jpg&q=70&w=1200&auto=format&fit=crop',
-    label: 'Estrés hídrico leve',
-  },
-  SEVERO: {
-    url: 'https://images.unsplash.com/photo-1747122450139-6363248ec01f?fm=jpg&q=70&w=1200&auto=format&fit=crop',
-    label: 'Estrés hídrico severo',
+  en: {
+    NORMAL: { url: 'https://images.unsplash.com/photo-1782087972248-82af30050866?fm=jpg&q=70&w=1200&auto=format&fit=crop', label: 'Healthy crop' },
+    LEVE: { url: 'https://images.unsplash.com/photo-1783932751325-2f833a1e7101?fm=jpg&q=70&w=1200&auto=format&fit=crop', label: 'Mild water stress' },
+    SEVERO: { url: 'https://images.unsplash.com/photo-1747122450139-6363248ec01f?fm=jpg&q=70&w=1200&auto=format&fit=crop', label: 'Severe water stress' },
   },
 };
 

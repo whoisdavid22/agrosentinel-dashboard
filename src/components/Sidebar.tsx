@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion';
 import { TABS, type TabId } from '../lib/tabs';
 import Logo from './Logo';
 
@@ -23,12 +24,19 @@ export default function Sidebar({ active, onSelect, labels }: SidebarProps) {
               key={tab.id}
               type="button"
               onClick={() => onSelect(tab.id)}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] transition-colors text-left ${
-                isActive ? 'bg-[#7d2c44]/15 text-white' : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+              className={`relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] transition-colors text-left ${
+                isActive ? 'text-white' : 'text-white/50 hover:bg-white/5 hover:text-white/80'
               }`}
             >
-              <Icon size={15} className="shrink-0" />
-              <span className="truncate">{labels[tab.id]}</span>
+              {isActive && (
+                <motion.span
+                  layoutId="sidebar-active"
+                  transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                  className="absolute inset-0 bg-[#7d2c44]/15 rounded-lg"
+                />
+              )}
+              <Icon size={15} className="relative shrink-0" />
+              <span className="relative truncate">{labels[tab.id]}</span>
             </button>
           );
         })}

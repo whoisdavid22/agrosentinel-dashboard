@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { REGION_RANGES } from '../../lib/constants';
+import { makeT, type Lang } from '../../lib/translations';
 import type { FieldZoneState, ImageZone } from '../../lib/types';
 
 interface MapTabProps {
+  lang: Lang;
   hum: number;
   ndvi: number;
   usingImageZones: boolean;
@@ -11,9 +14,10 @@ interface MapTabProps {
 }
 
 const ZONE_COLOR: Record<FieldZoneState, string> = { ok: '#268a4a', leve: '#b8791f', severo: '#b23a2c' };
-const ZONE_LABEL: Record<FieldZoneState, string> = { ok: 'Normal', leve: 'Estrés leve', severo: 'Estrés severo' };
 
-export default function MapTab({ hum, ndvi, usingImageZones, imageZones, resetMapToSimulation }: MapTabProps) {
+export default function MapTab({ lang, hum, ndvi, usingImageZones, imageZones, resetMapToSimulation }: MapTabProps) {
+  const tr = makeT(lang);
+  const ZONE_LABEL: Record<FieldZoneState, string> = { ok: tr('map.zone.normal'), leve: tr('map.zone.leve'), severo: tr('map.zone.severo') };
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const zones = useMemo<FieldZoneState[]>(() => {
@@ -56,37 +60,38 @@ export default function MapTab({ hum, ndvi, usingImageZones, imageZones, resetMa
     <div className="flex flex-col gap-5">
       <div className="rounded-2xl bg-white/[0.03] ring-1 ring-white/5 p-5">
         <div className="flex items-center justify-between mb-4">
-          <div className="text-xs text-white/40">
-            {usingImageZones ? 'Mapa basado en el análisis real de la imagen subida.' : 'Simulación basada en el promedio del campo'}
-          </div>
+          <div className="text-xs text-white/40">{usingImageZones ? tr('map.imageNote') : tr('map.simulationNote')}</div>
           {usingImageZones && (
             <button type="button" onClick={resetMapToSimulation} className="text-xs text-white/60 hover:text-white underline underline-offset-2">
-              Volver a simulación
+              {tr('map.resetToSimulation')}
             </button>
           )}
         </div>
 
         <div className="relative grid grid-cols-8 gap-1 aspect-square max-w-md mx-auto">
           {zones.map((z, i) => (
-            <div
+            <motion.div
               key={i}
               onMouseEnter={() => setHoverIdx(i)}
               onMouseLeave={() => setHoverIdx(null)}
-              className="rounded-sm transition-colors cursor-pointer"
-              style={{ background: ZONE_COLOR[z], opacity: hoverIdx === i ? 1 : 0.55 }}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: hoverIdx === i ? 1 : 0.55, scale: 1 }}
+              transition={{ duration: 0.3, delay: i * 0.004 }}
+              className="rounded-sm cursor-pointer"
+              style={{ background: ZONE_COLOR[z] }}
             />
           ))}
           {hoverIdx !== null && (
             <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/80 text-white text-[11px] px-2.5 py-1 rounded-full whitespace-nowrap pointer-events-none">
-              Sector {Math.floor(hoverIdx / 8) + 1}-{(hoverIdx % 8) + 1} | {ZONE_LABEL[zones[hoverIdx]]}
+              {tr('map.sector')} {Math.floor(hoverIdx / 8) + 1}-{(hoverIdx % 8) + 1} | {ZONE_LABEL[zones[hoverIdx]]}
             </div>
           )}
         </div>
 
         <div className="flex items-center justify-center gap-6 mt-5 text-xs">
-          <Legend color={ZONE_COLOR.ok} label={`Normal (${counts.ok})`} />
-          <Legend color={ZONE_COLOR.leve} label={`Leve (${counts.leve})`} />
-          <Legend color={ZONE_COLOR.severo} label={`Severo (${counts.severo})`} />
+          <Legend color={ZONE_COLOR.ok} label={`${tr('map.zone.normal')} (${counts.ok})`} />
+          <Legend color={ZONE_COLOR.leve} label={`${tr('map.zone.leve')} (${counts.leve})`} />
+          <Legend color={ZONE_COLOR.severo} label={`${tr('map.zone.severo')} (${counts.severo})`} />
         </div>
       </div>
     </div>

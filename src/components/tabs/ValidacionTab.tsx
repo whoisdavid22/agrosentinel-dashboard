@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import ChartCanvas from '../ChartCanvas';
 import { chartScalesDark } from '../../lib/chartDefaults';
+import { makeT, type Lang } from '../../lib/translations';
 
 interface NasaPowerResponse {
   properties: {
@@ -12,7 +14,12 @@ interface NasaPowerResponse {
   };
 }
 
-export default function ValidacionTab() {
+interface ValidacionTabProps {
+  lang: Lang;
+}
+
+export default function ValidacionTab({ lang }: ValidacionTabProps) {
+  const tr = makeT(lang);
   const [lat, setLat] = useState('9.93');
   const [lon, setLon] = useState('-84.08');
   const [dias, setDias] = useState(90);
@@ -24,10 +31,10 @@ export default function ValidacionTab() {
     const latN = parseFloat(lat);
     const lonN = parseFloat(lon);
     if (isNaN(latN) || isNaN(lonN)) {
-      setStatus('Ingresa latitud y longitud válidas.');
+      setStatus(tr('val.invalidCoords'));
       return;
     }
-    setStatus('Consultando NASA POWER (datos climáticos históricos reales)...');
+    setStatus(tr('val.querying'));
     setResumen(null);
     setChartData(null);
 
@@ -42,11 +49,11 @@ export default function ValidacionTab() {
 
     try {
       const res = await fetch(url);
-      if (!res.ok) throw new Error('NASA POWER respondió con error HTTP ' + res.status);
+      if (!res.ok) throw new Error('NASA POWER HTTP ' + res.status);
       const data: NasaPowerResponse = await res.json();
       const params = data.properties.parameter;
       const fechas = Object.keys(params.T2M).filter((k) => params.T2M[k] > -900);
-      if (fechas.length === 0) throw new Error('No se recibieron datos válidos para esas coordenadas.');
+      if (fechas.length === 0) throw new Error(tr('val.invalidCoords'));
 
       const KC = 0.75;
       const TAW_total = 210 * 0.4;
@@ -79,35 +86,28 @@ export default function ValidacionTab() {
       });
 
       setChartData({ labels, serie: serieHumedad });
-      setStatus(`Simulación de ${fechas.length} días completada con datos climáticos reales de NASA POWER (lat ${latN}, lon ${lonN}).`);
-      setResumen(
-        `Con este clima real, el sistema hubiera activado el riego en ${totalRiegos} de ${fechas.length} días (${Math.round(
-          (totalRiegos / fechas.length) * 100,
-        )}%). Esto es una simulación determinística (fórmula FAO-56, sin IA) usada para validar que la lógica de decisión responde de forma sensata ante condiciones climáticas reales, no solo ante escenarios manuales.`,
-      );
+      setStatus(tr('val.complete', fechas.length, latN, lonN));
+      setResumen(tr('val.summary', totalRiegos, fechas.length, Math.round((totalRiegos / fechas.length) * 100)));
     } catch (err) {
-      setStatus('Error al ejecutar la validación: ' + (err as Error).message);
+      setStatus(tr('val.error', (err as Error).message));
     }
   }
 
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-2xl bg-white/[0.03] ring-1 ring-white/5 p-5">
-        <p className="text-xs text-white/50 mb-4">
-          Simulación determinística (sin IA) día por día con clima histórico real de NASA POWER, para validar que la
-          lógica FAO-56 responde de forma sensata ante condiciones reales.
-        </p>
+        <p className="text-xs text-white/50 mb-4">{tr('val.intro')}</p>
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div>
-            <label className="text-[11px] uppercase tracking-wide text-white/50 block mb-1.5">Latitud</label>
+            <label className="text-[11px] uppercase tracking-wide text-white/50 block mb-1.5">{tr('val.lat')}</label>
             <input value={lat} onChange={(e) => setLat(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
           </div>
           <div>
-            <label className="text-[11px] uppercase tracking-wide text-white/50 block mb-1.5">Longitud</label>
+            <label className="text-[11px] uppercase tracking-wide text-white/50 block mb-1.5">{tr('val.lon')}</label>
             <input value={lon} onChange={(e) => setLon(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none" />
           </div>
           <div>
-            <label className="text-[11px] uppercase tracking-wide text-white/50 block mb-1.5">Días</label>
+            <label className="text-[11px] uppercase tracking-wide text-white/50 block mb-1.5">{tr('val.days')}</label>
             <select value={dias} onChange={(e) => setDias(parseInt(e.target.value))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none">
               {[30, 60, 90].map((d) => (
                 <option key={d} value={d} className="bg-[#141416]">
@@ -117,26 +117,32 @@ export default function ValidacionTab() {
             </select>
           </div>
         </div>
-        <button type="button" onClick={runValidacionHistorica} className="bg-[#7d2c44] hover:bg-[#5e2033] text-white text-sm font-medium py-2.5 px-6 rounded-full transition-colors">
-          Ejecutar validación
-        </button>
+        <motion.button
+          type="button"
+          onClick={runValidacionHistorica}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          className="bg-[#7d2c44] hover:bg-[#5e2033] text-white text-sm font-medium py-2.5 px-6 rounded-full transition-colors"
+        >
+          {tr('val.run')}
+        </motion.button>
         {status && <p className="text-xs text-white/40 mt-4">{status}</p>}
       </div>
 
       {chartData && (
-        <div className="rounded-2xl bg-white/[0.03] ring-1 ring-white/5 p-5">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-white/[0.03] ring-1 ring-white/5 p-5">
           <ChartCanvas
             config={{
               type: 'line',
               data: {
                 labels: chartData.labels,
-                datasets: [{ label: 'Humedad simulada %', data: chartData.serie, borderColor: '#268a4a', backgroundColor: 'rgba(38,138,74,0.08)', tension: 0.25, pointRadius: 0, fill: true }],
+                datasets: [{ label: tr('val.simulatedHumidity'), data: chartData.serie, borderColor: '#268a4a', backgroundColor: 'rgba(38,138,74,0.08)', tension: 0.25, pointRadius: 0, fill: true }],
               },
               options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ...chartScalesDark.x, ticks: { ...chartScalesDark.x.ticks, maxTicksLimit: 12 } }, y: { ...chartScalesDark.y, min: 0, max: 100 } } },
             }}
           />
           {resumen && <p className="text-sm text-white/60 leading-relaxed mt-4">{resumen}</p>}
-        </div>
+        </motion.div>
       )}
     </div>
   );

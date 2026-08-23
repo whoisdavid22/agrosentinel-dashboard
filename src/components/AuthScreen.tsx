@@ -2,9 +2,16 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Droplets } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { makeT, type Lang } from '../lib/translations';
 import Logo from './Logo';
 
-export default function AuthScreen() {
+interface AuthScreenProps {
+  lang: Lang;
+  onToggleLang: () => void;
+}
+
+export default function AuthScreen({ lang, onToggleLang }: AuthScreenProps) {
+  const tr = makeT(lang);
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,7 +20,7 @@ export default function AuthScreen() {
 
   async function attemptLogin() {
     if (!email.trim() || !password) {
-      setStatus({ text: 'Ingresá tu correo y contraseña.', error: true });
+      setStatus({ text: tr('auth.error.missing'), error: true });
       return;
     }
     setLoading(true);
@@ -25,13 +32,10 @@ export default function AuthScreen() {
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        setStatus({
-          text: 'Cuenta creada. Si tu proyecto pide confirmación por correo, revísalo; si no, ya puedes iniciar sesión.',
-          error: false,
-        });
+        setStatus({ text: tr('auth.success.registered'), error: false });
       }
     } catch (err) {
-      setStatus({ text: (err as Error).message || 'Error de autenticación.', error: true });
+      setStatus({ text: (err as Error).message, error: true });
     } finally {
       setLoading(false);
     }
@@ -49,6 +53,14 @@ export default function AuthScreen() {
         aria-hidden="true"
       />
 
+      <button
+        type="button"
+        onClick={onToggleLang}
+        className="fixed top-5 right-5 z-20 text-xs font-medium text-white/70 hover:text-white bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-full transition-colors"
+      >
+        {lang === 'es' ? 'EN' : 'ES'}
+      </button>
+
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -61,30 +73,28 @@ export default function AuthScreen() {
         </div>
 
         <div className="liquid-glass rounded-2xl p-7 sm:p-8">
-          <h1 className="font-garamond text-2xl text-white mb-1">{mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}</h1>
-          <p className="text-white/50 text-xs mb-6">Monitor de estrés hídrico — IA autónoma</p>
+          <h1 className="font-garamond text-2xl text-white mb-1">{mode === 'login' ? tr('auth.title.login') : tr('auth.title.register')}</h1>
+          <p className="text-white/50 text-xs mb-6">{tr('auth.subtitle')}</p>
 
           <div className="flex flex-col gap-3 mb-4">
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Correo electrónico"
+              placeholder={tr('auth.email')}
               className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-white/30 transition-colors"
             />
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Contraseña"
+              placeholder={tr('auth.password')}
               onKeyDown={(e) => e.key === 'Enter' && attemptLogin()}
               className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 outline-none focus:border-white/30 transition-colors"
             />
           </div>
 
-          {status && (
-            <p className={`text-xs mb-4 ${status.error ? 'text-[#c0392b]' : 'text-[#268a4a]'}`}>{status.text}</p>
-          )}
+          {status && <p className={`text-xs mb-4 ${status.error ? 'text-[#c0392b]' : 'text-[#268a4a]'}`}>{status.text}</p>}
 
           <button
             type="button"
@@ -92,7 +102,7 @@ export default function AuthScreen() {
             onClick={attemptLogin}
             className="w-full bg-[#7d2c44] hover:bg-[#5e2033] disabled:opacity-50 text-white text-sm font-medium py-2.5 rounded-full transition-colors mb-3"
           >
-            {loading ? 'Procesando...' : mode === 'login' ? 'Iniciar sesión' : 'Registrarme'}
+            {loading ? tr('auth.processing') : mode === 'login' ? tr('auth.submit.login') : tr('auth.submit.register')}
           </button>
 
           <button
@@ -101,11 +111,11 @@ export default function AuthScreen() {
             className="w-full flex items-center justify-center gap-2 bg-white text-gray-900 text-sm font-medium py-2.5 rounded-full hover:bg-gray-100 transition-colors mb-4"
           >
             <GoogleIcon />
-            Continuar con Google
+            {tr('auth.google')}
           </button>
 
           <p className="text-center text-xs text-white/50">
-            {mode === 'login' ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? '}
+            {mode === 'login' ? tr('auth.switch.toRegister') : tr('auth.switch.toLogin')}{' '}
             <button
               type="button"
               onClick={() => {
@@ -114,14 +124,14 @@ export default function AuthScreen() {
               }}
               className="text-white underline underline-offset-2 hover:no-underline"
             >
-              {mode === 'login' ? 'Regístrate' : 'Inicia sesión'}
+              {mode === 'login' ? tr('auth.switch.registerLink') : tr('auth.switch.loginLink')}
             </button>
           </p>
         </div>
 
         <div className="flex items-center justify-center gap-1.5 mt-6 text-white/30 text-[11px]">
           <Droplets size={12} />
-          <span>San Carlos, Alajuela — Costa Rica</span>
+          <span>{tr('auth.location')}</span>
         </div>
       </motion.div>
     </div>

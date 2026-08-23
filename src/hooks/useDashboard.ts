@@ -11,14 +11,25 @@ import {
 import { calcularFAO56Local, computePredictions, type Predictions } from '../lib/faoCalc';
 import type { CurrentData, DecisionResponse, LogEntry, FetchErrorInfo, ImageZone } from '../lib/types';
 import type { User } from '@supabase/supabase-js';
+import { t, type Lang } from '../lib/translations';
 
-const ERROR_LABELS: Record<string, string> = {
-  timeout: 'Tiempo de espera agotado',
-  red: 'Sin conexión con n8n',
-  http: 'Error de n8n / Claude',
-  json: 'Respuesta mal formada',
-  estructura: 'Formato inesperado',
-  desconocido: 'Error',
+const ERROR_LABELS: Record<Lang, Record<string, string>> = {
+  es: {
+    timeout: 'Tiempo de espera agotado',
+    red: 'Sin conexión con n8n',
+    http: 'Error de n8n / Claude',
+    json: 'Respuesta mal formada',
+    estructura: 'Formato inesperado',
+    desconocido: 'Error',
+  },
+  en: {
+    timeout: 'Timed out',
+    red: 'No connection to n8n',
+    http: 'n8n / Claude error',
+    json: 'Malformed response',
+    estructura: 'Unexpected format',
+    desconocido: 'Error',
+  },
 };
 
 const DEFAULT_DATA: CurrentData = {
@@ -39,27 +50,12 @@ export const PRESETS: Record<string, Partial<CurrentData>> = {
   ambiguo: { ndvi: 0.6, temperatura_c: 33.0, humedad_suelo_pct: 28, precipitacion_mm: 0.5, dias_sin_lluvia: 6 },
 };
 
-export const EDGE_CASES: Record<string, { label: string; desc: string; data: Partial<CurrentData> }> = {
-  ndvi_alto_hum_baja: {
-    label: 'NDVI alto, humedad baja',
-    desc: 'Follaje aún verde pero el suelo ya está seco — ¿el sistema confía en el NDVI o en la humedad?',
-    data: { ndvi: 0.75, temperatura_c: 29.0, humedad_suelo_pct: 19, precipitacion_mm: 0, dias_sin_lluvia: 11 },
-  },
-  lluvia_reciente_dias_altos: {
-    label: 'Lluvia reciente, muchos días sin lluvia',
-    desc: 'Datos contradictorios: llovió mucho hoy, pero el contador de días sin lluvia sigue alto.',
-    data: { ndvi: 0.35, temperatura_c: 26.0, humedad_suelo_pct: 33, precipitacion_mm: 22, dias_sin_lluvia: 19 },
-  },
-  temp_extrema_hum_ok: {
-    label: 'Temperatura extrema, humedad aceptable',
-    desc: 'Calor severo con humedad del suelo todavía en rango — ¿basta para regar igual?',
-    data: { ndvi: 0.58, temperatura_c: 41.5, humedad_suelo_pct: 55, precipitacion_mm: 0, dias_sin_lluvia: 4 },
-  },
-  todo_limite: {
-    label: 'Todo en el límite',
-    desc: 'Ningún valor es extremo, pero todos están justo en el borde de sus umbrales.',
-    data: { ndvi: 0.45, temperatura_c: 30.0, humedad_suelo_pct: 40, precipitacion_mm: 2, dias_sin_lluvia: 7 },
-  },
+// Label/description text lives in translations.ts (edge.case.<key>.*) — this holds only the scenario data.
+export const EDGE_CASES: Record<string, { data: Partial<CurrentData> }> = {
+  ndvi_alto_hum_baja: { data: { ndvi: 0.75, temperatura_c: 29.0, humedad_suelo_pct: 19, precipitacion_mm: 0, dias_sin_lluvia: 11 } },
+  lluvia_reciente_dias_altos: { data: { ndvi: 0.35, temperatura_c: 26.0, humedad_suelo_pct: 33, precipitacion_mm: 22, dias_sin_lluvia: 19 } },
+  temp_extrema_hum_ok: { data: { ndvi: 0.58, temperatura_c: 41.5, humedad_suelo_pct: 55, precipitacion_mm: 0, dias_sin_lluvia: 4 } },
+  todo_limite: { data: { ndvi: 0.45, temperatura_c: 30.0, humedad_suelo_pct: 40, precipitacion_mm: 2, dias_sin_lluvia: 7 } },
 };
 
 export interface ChatMsg {
@@ -87,7 +83,7 @@ export function useDashboard() {
   const [lastResponse, setLastResponse] = useState<DecisionResponse | null>(null);
   const [offline, setOffline] = useState<{ active: boolean; etiqueta: string; calc: ReturnType<typeof calcularFAO56Local> } | null>(null);
   const [apiStatus, setApiStatus] = useState<'idle' | 'ok' | 'error'>('idle');
-  const [apiStatusLabel, setApiStatusLabel] = useState('Sin analizar aún');
+  const [apiErrorTipo, setApiErrorTipo] = useState<string | null>(null);
 
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const [decisionesHistorial, setDecisionesHistorial] = useState<DecisionResponse[]>([]);
@@ -116,7 +112,7 @@ export function useDashboard() {
   const [historial, setHistorial] = useState<HistorialRow[] | null>(null);
   const [historialStatus, setHistorialStatus] = useState('');
 
-  const [lang, setLang] = useState<'es' | 'en'>('es');
+  const [lang, setLang] = useState<Lang>('es');
 
   const failsafeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -197,11 +193,12 @@ export function useDashboard() {
 
   const runOfflineFallback = useCallback((errInfo: FetchErrorInfo) => {
     const calc = calcularFAO56Local(currentDataRef.current);
-    const etiqueta = ERROR_LABELS[errInfo.tipo] || 'Error de conexión';
+    const etiqueta = ERROR_LABELS[lang][errInfo.tipo] || ERROR_LABELS[lang].desconocido;
     setOffline({ active: true, etiqueta, calc });
     setLastResponse(null);
     setPredictions(computePredictions(currentDataRef.current, calc.diasCriticos));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lang]);
 
   const addLogEntry = useCallback((data: DecisionResponse) => {
     const now = new Date();
@@ -219,10 +216,10 @@ export function useDashboard() {
 
   const updateCharts = useCallback(() => {
     setChartHistory((h) => {
-      const t = new Date().toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
+      const timeLabel = new Date().toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
       const d = currentDataRef.current;
       const next = {
-        labels: [...h.labels, t],
+        labels: [...h.labels, timeLabel],
         hum: [...h.hum, d.humedad_suelo_pct],
         ndvi: [...h.ndvi, Math.round(d.ndvi * 100)],
         temp: [...h.temp, d.temperatura_c],
@@ -305,7 +302,7 @@ export function useDashboard() {
 
       setLastResponse(data);
       setApiStatus('ok');
-      setApiStatusLabel('API Claude — OK');
+      setApiErrorTipo(null);
 
       addLogEntry(data);
       guardarLecturaSupabase(d, data);
@@ -330,7 +327,7 @@ export function useDashboard() {
           ? (err as FetchErrorInfo)
           : { tipo: 'desconocido', mensaje: (err as Error)?.message || 'Error desconocido al contactar el agente.' };
       setApiStatus('error');
-      setApiStatusLabel('API Claude — ' + (ERROR_LABELS[info.tipo] || 'Error'));
+      setApiErrorTipo(info.tipo);
       runOfflineFallback(info);
     } finally {
       setIsLoading(false);
@@ -418,23 +415,23 @@ export function useDashboard() {
           }),
         });
         const data = await res.json();
-        setChatMessages((m) => [...m, { who: 'bot', text: data.respuesta || 'No obtuve una respuesta clara, intenta reformular la pregunta.' }]);
+        setChatMessages((m) => [...m, { who: 'bot', text: data.respuesta || t(lang, 'copilot.noResponse') }]);
       } catch {
-        setChatMessages((m) => [...m, { who: 'bot', text: 'No se pudo conectar con el copiloto. Verifica el webhook en n8n.' }]);
+        setChatMessages((m) => [...m, { who: 'bot', text: t(lang, 'copilot.failed') }]);
       } finally {
         setChatLoading(false);
       }
     },
-    [lastResponse],
+    [lastResponse, lang],
   );
 
   // ---- Historial real (Supabase) ----
   const cargarHistorialReal = useCallback(async () => {
     if (!user) {
-      setHistorialStatus('Debes iniciar sesión para ver tu historial.');
+      setHistorialStatus(t(lang, 'hist.loginRequired'));
       return;
     }
-    setHistorialStatus('Consultando Supabase...');
+    setHistorialStatus(t(lang, 'hist.querying'));
     try {
       const { data, error } = await supabase
         .from('Lecturas')
@@ -444,16 +441,17 @@ export function useDashboard() {
         .limit(200);
       if (error) throw error;
       if (!data || data.length === 0) {
-        setHistorialStatus('Aún no tienes lecturas guardadas. Haz un análisis en la pestaña "Decisión" primero.');
+        setHistorialStatus(t(lang, 'hist.empty'));
         setHistorial([]);
         return;
       }
-      setHistorialStatus(`${data.length} lecturas encontradas (todas tus sesiones, no solo la actual).`);
+      setHistorialStatus(t(lang, 'hist.found', data.length));
       setHistorial(data as HistorialRow[]);
     } catch (err) {
-      setHistorialStatus('Error al consultar Supabase: ' + (err as Error).message);
+      setHistorialStatus(t(lang, 'hist.error', (err as Error).message));
     }
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, lang]);
 
   // ---- Demo mode ----
   const [demoRunning, setDemoRunning] = useState(false);
@@ -463,11 +461,11 @@ export function useDashboard() {
     if (demoRunning) return;
     setDemoRunning(true);
     const pasos = [
-      { preset: 'severo' as const, espera: 4000, narracion: 'El campo entra en estrés hídrico severo: poca humedad, muchos días sin lluvia. Observa cómo el sistema detecta la condición y decide abrir la válvula automáticamente.' },
-      { preset: 'leve' as const, espera: 4000, narracion: 'Tras el riego, la humedad del suelo mejora a un nivel leve. El sistema reduce el porcentaje de apertura de la válvula, dosificando el riego según la nueva necesidad real.' },
-      { preset: 'optimo' as const, espera: 0, narracion: 'El cultivo alcanza condiciones óptimas. El sistema cierra la válvula por completo, evitando desperdiciar agua cuando ya no hace falta regar.' },
+      { preset: 'severo' as const, espera: 4000, narracion: t(lang, 'demo.step1') },
+      { preset: 'leve' as const, espera: 4000, narracion: t(lang, 'demo.step2') },
+      { preset: 'optimo' as const, espera: 0, narracion: t(lang, 'demo.step3') },
     ];
-    setDemoNarration('Iniciando demostración automática...');
+    setDemoNarration(t(lang, 'demo.starting'));
     for (const paso of pasos) {
       setDemoNarration(paso.narracion);
       applyPreset(paso.preset);
@@ -475,7 +473,7 @@ export function useDashboard() {
       await fetchData();
       if (paso.espera) await new Promise((r) => setTimeout(r, paso.espera));
     }
-    setDemoNarration('Demostración completa. El ciclo percibir → decidir → actuar ocurrió sin intervención humana en los tres pasos.');
+    setDemoNarration(t(lang, 'demo.complete'));
     await new Promise((r) => setTimeout(r, 3500));
     setDemoNarration(null);
     setDemoRunning(false);
@@ -498,6 +496,13 @@ export function useDashboard() {
         colones: litrosAColones(lastResponse.litros_ahorrados_estimados ?? 0),
       }
     : null;
+
+  const apiStatusLabel =
+    apiStatus === 'idle'
+      ? t(lang, 'status.idle')
+      : apiStatus === 'ok'
+        ? t(lang, 'status.ok')
+        : t(lang, 'status.error', ERROR_LABELS[lang][apiErrorTipo ?? 'desconocido'] || ERROR_LABELS[lang].desconocido);
 
   return {
     user,
