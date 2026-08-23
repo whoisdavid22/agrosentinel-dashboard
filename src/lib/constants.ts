@@ -7,9 +7,12 @@ export const IMAGE_WEBHOOK_URL = 'https://innowgp13.app.n8n.cloud/webhook/analiz
 // Not real security (visible in client bundle) — just a casual-call deterrent, matches n8n IF check.
 export const API_TOKEN = 'Agrosentinel-$VD-1234';
 
-// Red de Parcelas endpoints — not yet published in n8n (see project README). Left blank on purpose.
-export const SHARED_SHARE_URL = '';
-export const SHARED_STATS_URL = '';
+// Red de Parcelas: compartir está publicado y probado; stats devuelve vacío
+// todavía (misma clase de bug que ya arreglamos en otros flujos, pendiente).
+export const SHARED_SHARE_URL = 'https://innowgp13.app.n8n.cloud/webhook/red-compartir';
+export const SHARED_STATS_URL = 'https://innowgp13.app.n8n.cloud/webhook/red-stats';
+
+export const CAUDAL_MAX_VALVULA_LMIN = 4.2;
 
 export const FAILSAFE_MINUTES = 5;
 

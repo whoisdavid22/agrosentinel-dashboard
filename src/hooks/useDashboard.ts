@@ -7,9 +7,10 @@ import {
   API_TOKEN,
   FAILSAFE_MINUTES,
   litrosAColones,
+  SHARED_SHARE_URL,
 } from '../lib/constants';
 import { calcularFAO56Local, computePredictions, type Predictions } from '../lib/faoCalc';
-import type { CurrentData, DecisionResponse, LogEntry, FetchErrorInfo, ImageZone } from '../lib/types';
+import type { CurrentData, DecisionResponse, LogEntry, FetchErrorInfo, ImageZone, Calibracion, AsignacionRed } from '../lib/types';
 import type { User } from '@supabase/supabase-js';
 import { t, type Lang } from '../lib/translations';
 
@@ -111,6 +112,11 @@ export function useDashboard() {
 
   const [historial, setHistorial] = useState<HistorialRow[] | null>(null);
   const [historialStatus, setHistorialStatus] = useState('');
+
+  const [calibracion, setCalibracion] = useState<Calibracion | null>(null);
+  const [asignacionRed, setAsignacionRed] = useState<AsignacionRed | null>(null);
+  const [redCuenca, setRedCuenca] = useState('');
+  const [redShareStatus, setRedShareStatus] = useState('');
 
   const [lang, setLang] = useState<Lang>('es');
 
@@ -236,6 +242,104 @@ export function useDashboard() {
     });
   }, []);
 
+  // ---- Calibración (factor de ajuste Kc/TAW aprendido por parcela) ----
+  const cargarCalibracion = useCallback(async () => {
+    if (!user) {
+      setCalibracion(null);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('Calibracion')
+        .select('kc_ajuste,taw_ajuste,muestras,confianza')
+        .eq('user_id', user.id)
+        .eq('cultivo', currentDataRef.current.cultivo)
+        .eq('etapa_fenologica', currentDataRef.current.etapa_fenologica)
+        .maybeSingle();
+      if (error) throw error;
+      setCalibracion(data && data.muestras > 0 ? (data as Calibracion) : null);
+    } catch {
+      setCalibracion(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    cargarCalibracion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargarCalibracion, currentData.cultivo, currentData.etapa_fenologica]);
+
+  // ---- Red de Parcelas: coordinación de agua compartida entre fincas ----
+  const cargarAsignacionRed = useCallback(async () => {
+    if (!user) {
+      setAsignacionRed(null);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('RedParcelas')
+        .select('cuenca,porcentaje_apertura_deseado,porcentaje_apertura_asignado,motivo_asignacion,created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      setAsignacionRed(data as AsignacionRed | null);
+    } catch {
+      setAsignacionRed(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    cargarAsignacionRed();
+  }, [cargarAsignacionRed]);
+
+  const compartirConRed = useCallback(
+    async (cuenca: string) => {
+      if (!user) {
+        setRedShareStatus(t(lang, 'red.needCheck'));
+        return;
+      }
+      if (!cuenca.trim()) {
+        setRedShareStatus(t(lang, 'red.needCuenca'));
+        return;
+      }
+      const d = currentDataRef.current;
+      const nivelAlerta = offline ? offline.calc.nivel : lastResponse?.nivel_alerta;
+      const diasSinIntervencion = offline ? offline.calc.diasCriticos : lastResponse?.dias_sin_intervencion;
+      const porcentajeDeseado = offline
+        ? offline.calc.aperturaPct
+        : (lastResponse?.porcentaje_apertura ?? (lastResponse?.valvula === 'ABIERTA' ? 100 : 0));
+
+      if (nivelAlerta === undefined || diasSinIntervencion === undefined) {
+        setRedShareStatus(t(lang, 'decision.empty'));
+        return;
+      }
+
+      try {
+        const res = await fetch(SHARED_SHARE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: API_TOKEN,
+            user_id: user.id,
+            cuenca: cuenca.trim(),
+            humedad_suelo_pct: d.humedad_suelo_pct,
+            ndvi: d.ndvi,
+            nivel_alerta: nivelAlerta,
+            dias_sin_intervencion: diasSinIntervencion,
+            porcentaje_apertura_deseado: porcentajeDeseado,
+          }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        setRedShareStatus(t(lang, 'red.shared'));
+        cargarAsignacionRed();
+      } catch {
+        setRedShareStatus(t(lang, 'red.shareFailed'));
+      }
+    },
+    [user, lang, offline, lastResponse, cargarAsignacionRed],
+  );
+
   const fetchData = useCallback(async () => {
     if (isLoading) return;
     setIsLoading(true);
@@ -258,6 +362,7 @@ export function useDashboard() {
         idioma: lang,
         token: API_TOKEN,
       };
+      if (user) paramsObj.user_id = user.id;
       if (d.radiacion_solar !== undefined) paramsObj.radiacion_solar = String(d.radiacion_solar);
       if (d.temperatura_min_c !== undefined) paramsObj.temperatura_min_c = String(d.temperatura_min_c);
       if (d.temperatura_max_c !== undefined) paramsObj.temperatura_max_c = String(d.temperatura_max_c);
@@ -320,6 +425,7 @@ export function useDashboard() {
       }
 
       scheduleFailsafe(data.valvula);
+      cargarCalibracion();
     } catch (err) {
       clearTimeout(timeoutId);
       const info: FetchErrorInfo =
@@ -332,7 +438,7 @@ export function useDashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, lang, decisionesHistorial, addLogEntry, guardarLecturaSupabase, updateCharts, scheduleFailsafe, runOfflineFallback]);
+  }, [isLoading, lang, user, decisionesHistorial, addLogEntry, guardarLecturaSupabase, updateCharts, scheduleFailsafe, runOfflineFallback, cargarCalibracion]);
 
   // ---- Auto polling ----
   useEffect(() => {
@@ -537,6 +643,13 @@ export function useDashboard() {
     historial,
     historialStatus,
     cargarHistorialReal,
+    calibracion,
+    asignacionRed,
+    cargarAsignacionRed,
+    compartirConRed,
+    redCuenca,
+    setRedCuenca,
+    redShareStatus,
     lang,
     setLang,
     demoRunning,

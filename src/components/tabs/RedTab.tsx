@@ -1,38 +1,29 @@
 import { useState } from 'react';
-import { SHARED_SHARE_URL, SHARED_STATS_URL } from '../../lib/constants';
+import { motion } from 'framer-motion';
 import { makeT, type Lang } from '../../lib/translations';
+import type { AsignacionRed } from '../../lib/types';
 
 interface RedTabProps {
   lang: Lang;
+  asignacionRed: AsignacionRed | null;
+  cargarAsignacionRed: () => void;
+  compartirConRed: (cuenca: string) => void;
+  redCuenca: string;
+  setRedCuenca: (v: string) => void;
+  redShareStatus: string;
 }
 
-export default function RedTab({ lang }: RedTabProps) {
+export default function RedTab({
+  lang,
+  asignacionRed,
+  cargarAsignacionRed,
+  compartirConRed,
+  redCuenca,
+  setRedCuenca,
+  redShareStatus,
+}: RedTabProps) {
   const tr = makeT(lang);
   const [share, setShare] = useState(false);
-  const [cuenca, setCuenca] = useState('');
-  const [status, setStatus] = useState('');
-
-  function shareToNetwork() {
-    if (!share) {
-      setStatus(tr('red.needCheck'));
-      return;
-    }
-    if (!cuenca.trim()) {
-      setStatus(tr('red.needCuenca'));
-      return;
-    }
-    if (!SHARED_SHARE_URL) {
-      setStatus(tr('red.notPublished'));
-      return;
-    }
-  }
-
-  function refreshNetwork() {
-    if (!SHARED_STATS_URL) {
-      setStatus(tr('red.notPublished'));
-      return;
-    }
-  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -47,24 +38,62 @@ export default function RedTab({ lang }: RedTabProps) {
         {share && (
           <input
             type="text"
-            value={cuenca}
-            onChange={(e) => setCuenca(e.target.value)}
+            value={redCuenca}
+            onChange={(e) => setRedCuenca(e.target.value)}
             placeholder={tr('red.cuencaPlaceholder')}
             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 outline-none mb-4"
           />
         )}
 
         <div className="flex gap-3">
-          <button type="button" onClick={shareToNetwork} className="bg-white/10 hover:bg-white/15 text-white text-sm font-medium px-5 py-2.5 rounded-full transition-colors">
+          <button
+            type="button"
+            onClick={() => (share ? compartirConRed(redCuenca) : undefined)}
+            className="bg-white/10 hover:bg-white/15 text-white text-sm font-medium px-5 py-2.5 rounded-full transition-colors"
+          >
             {tr('red.shareBtn')}
           </button>
-          <button type="button" onClick={refreshNetwork} className="bg-white/10 hover:bg-white/15 text-white text-sm font-medium px-5 py-2.5 rounded-full transition-colors">
+          <button type="button" onClick={cargarAsignacionRed} className="bg-white/10 hover:bg-white/15 text-white text-sm font-medium px-5 py-2.5 rounded-full transition-colors">
             {tr('red.refreshBtn')}
           </button>
         </div>
 
-        {status && <p className="text-xs text-white/40 mt-4">{status}</p>}
+        {redShareStatus && <p className="text-xs text-white/40 mt-4">{redShareStatus}</p>}
       </div>
+
+      {asignacionRed && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-white/[0.03] ring-1 ring-white/5 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium text-white">{tr('red.yourAssignment')}</h3>
+            <button type="button" onClick={cargarAsignacionRed} className="text-xs text-white/60 hover:text-white underline underline-offset-2">
+              {tr('red.refresh')}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-4 mb-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-white/40 mb-1">{tr('red.requested')}</div>
+              <div className="text-xl text-white font-medium">{asignacionRed.porcentaje_apertura_deseado ?? '—'}%</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-white/40 mb-1">{tr('red.assigned')}</div>
+              <div
+                className="text-xl font-medium"
+                style={{
+                  color:
+                    asignacionRed.porcentaje_apertura_asignado === null
+                      ? 'rgba(255,255,255,0.4)'
+                      : asignacionRed.porcentaje_apertura_asignado < (asignacionRed.porcentaje_apertura_deseado ?? 0)
+                        ? '#b8791f'
+                        : '#268a4a',
+                }}
+              >
+                {asignacionRed.porcentaje_apertura_asignado ?? '—'}%
+              </div>
+            </div>
+          </div>
+          {asignacionRed.motivo_asignacion && <p className="text-xs text-white/50 leading-relaxed">{asignacionRed.motivo_asignacion}</p>}
+        </motion.div>
+      )}
     </div>
   );
 }

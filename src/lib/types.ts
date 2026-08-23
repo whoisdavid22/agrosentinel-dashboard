@@ -62,3 +62,18 @@ export interface FetchErrorInfo {
   tipo: ErrorTipo;
   mensaje: string;
 }
+
+export interface Calibracion {
+  kc_ajuste: number;
+  taw_ajuste: number;
+  muestras: number;
+  confianza: 'baja' | 'media' | 'alta';
+}
+
+export interface AsignacionRed {
+  cuenca: string;
+  porcentaje_apertura_deseado: number | null;
+  porcentaje_apertura_asignado: number | null;
+  motivo_asignacion: string | null;
+  created_at: string;
+}

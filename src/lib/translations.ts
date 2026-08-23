@@ -87,6 +87,10 @@ const dict = {
     'decision.offline.body': (etiqueta: string, dias: number) =>
       `Sin conexión con Claude/n8n (${etiqueta}). Esta es una recomendación básica calculada localmente con la fórmula FAO-56 (sin el razonamiento de IA). Días estimados hasta estrés crítico: ${dias}. Reintenta cuando se restablezca la conexión para obtener el análisis completo.`,
     'decision.offline.action': (valvula: string, pct: number) => `[MODO OFFLINE] ${valvula} ${pct > 0 ? pct + '%' : ''}`,
+    'decision.calibration.badge': (kc: string, muestras: number) => `Calibrado para esta parcela · Kc ×${kc} · ${muestras} lectura${muestras !== 1 ? 's' : ''}`,
+    'decision.calibration.baja': 'confianza baja',
+    'decision.calibration.media': 'confianza media',
+    'decision.calibration.alta': 'confianza alta',
 
     // Valve3D
     'valve3d.hint': 'Arrastra para rotar la cámara — se reanuda la rotación automática después de un momento.',
@@ -189,6 +193,12 @@ const dict = {
     'red.needCheck': 'Activa la casilla de compartir antes de enviar tu lectura.',
     'red.needCuenca': 'Escribe el nombre de tu cuenca o cooperativa antes de compartir.',
     'red.notPublished': 'La red de parcelas requiere un endpoint adicional en n8n (aún no publicado — ver README del proyecto).',
+    'red.shared': 'Lectura compartida con la red. La asignación puede tardar unos minutos en actualizarse.',
+    'red.shareFailed': 'No se pudo compartir la lectura con la red. Intenta de nuevo en un momento.',
+    'red.yourAssignment': 'Tu asignación en la red',
+    'red.requested': 'Solicitado',
+    'red.assigned': 'Asignado por la red',
+    'red.refresh': 'Actualizar',
 
     // Historial
     'hist.title': 'Historial real (todas tus sesiones)',
@@ -314,6 +324,10 @@ const dict = {
     'decision.offline.body': (etiqueta: string, dias: number) =>
       `No connection to Claude/n8n (${etiqueta}). This is a basic recommendation calculated locally with the FAO-56 formula (without AI reasoning). Estimated days until critical stress: ${dias}. Retry once the connection is restored for the full analysis.`,
     'decision.offline.action': (valvula: string, pct: number) => `[OFFLINE MODE] ${valvula} ${pct > 0 ? pct + '%' : ''}`,
+    'decision.calibration.badge': (kc: string, muestras: number) => `Calibrated for this plot · Kc ×${kc} · ${muestras} reading${muestras !== 1 ? 's' : ''}`,
+    'decision.calibration.baja': 'low confidence',
+    'decision.calibration.media': 'medium confidence',
+    'decision.calibration.alta': 'high confidence',
 
     'valve3d.hint': 'Drag to rotate the camera — auto-rotation resumes after a moment.',
     'valve3d.flow': 'Flow',
@@ -408,6 +422,12 @@ const dict = {
     'red.needCheck': 'Enable the share checkbox before sending your reading.',
     'red.needCuenca': 'Enter the name of your watershed or cooperative before sharing.',
     'red.notPublished': 'The parcel network requires an additional n8n endpoint (not yet published — see project README).',
+    'red.shared': 'Reading shared with the network. The assignment may take a few minutes to update.',
+    'red.shareFailed': 'Could not share the reading with the network. Try again in a moment.',
+    'red.yourAssignment': 'Your network assignment',
+    'red.requested': 'Requested',
+    'red.assigned': 'Assigned by the network',
+    'red.refresh': 'Refresh',
 
     'hist.title': 'Real history (all your sessions)',
     'hist.refresh': 'Refresh',

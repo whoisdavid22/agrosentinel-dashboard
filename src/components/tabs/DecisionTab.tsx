@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Sparkles, Share2 } from 'lucide-react';
 import { PHOTOS_POR_ALERTA, MODEL_NAME } from '../../lib/constants';
 import { makeT, humanize, type Lang } from '../../lib/translations';
-import type { DecisionResponse } from '../../lib/types';
+import type { DecisionResponse, Calibracion, AsignacionRed } from '../../lib/types';
 import type { OfflineCalcResult } from '../../lib/faoCalc';
 import type { LogEntry } from '../../lib/types';
 
@@ -12,6 +12,8 @@ interface DecisionTabProps {
   lastResponse: DecisionResponse | null;
   offline: { active: boolean; etiqueta: string; calc: OfflineCalcResult } | null;
   logEntries: LogEntry[];
+  calibracion: Calibracion | null;
+  asignacionRed: AsignacionRed | null;
 }
 
 const CONF_COLORS: Record<string, { bg: string; fg: string }> = {
@@ -20,7 +22,7 @@ const CONF_COLORS: Record<string, { bg: string; fg: string }> = {
   BAJA: { bg: 'rgba(178,58,44,0.15)', fg: '#b23a2c' },
 };
 
-export default function DecisionTab({ lang, lastResponse, offline, logEntries }: DecisionTabProps) {
+export default function DecisionTab({ lang, lastResponse, offline, logEntries, calibracion, asignacionRed }: DecisionTabProps) {
   const tr = makeT(lang);
   const [reasoningOpen, setReasoningOpen] = useState(false);
 
@@ -74,9 +76,38 @@ export default function DecisionTab({ lang, lastResponse, offline, logEntries }:
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-white/30 font-jetbrains mb-4">
+              <p className="text-[11px] text-white/30 font-jetbrains mb-2">
                 {tr('decision.model')}: {MODEL_NAME}
               </p>
+
+              <div className="flex flex-wrap gap-2 mb-4">
+                {calibracion && !offline && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    title={tr(`decision.calibration.${calibracion.confianza}`)}
+                    className="inline-flex items-center gap-1.5 text-[11px] text-[#c9a8dd] bg-[#8f5da6]/10 px-2.5 py-1 rounded-full"
+                  >
+                    <Sparkles size={11} />
+                    {tr('decision.calibration.badge', calibracion.kc_ajuste.toFixed(2), calibracion.muestras)}
+                  </motion.div>
+                )}
+                {asignacionRed &&
+                  asignacionRed.porcentaje_apertura_asignado !== null &&
+                  asignacionRed.porcentaje_apertura_asignado !== asignacionRed.porcentaje_apertura_deseado && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: 0.05 }}
+                      title={asignacionRed.motivo_asignacion ?? undefined}
+                      className="inline-flex items-center gap-1.5 text-[11px] text-[#2d6e8f] bg-[#2d6e8f]/10 px-2.5 py-1 rounded-full"
+                    >
+                      <Share2 size={11} />
+                      {tr('red.requested')} {asignacionRed.porcentaje_apertura_deseado}% · {tr('red.assigned')} {asignacionRed.porcentaje_apertura_asignado}%
+                    </motion.div>
+                  )}
+              </div>
 
               <blockquote className={`text-sm leading-relaxed border-l-2 pl-4 ${offline ? 'italic text-[#b8791f] border-[#b8791f]/40' : 'text-white/70 border-white/10'}`}>
                 {offline ? tr('decision.offline.body', offline.etiqueta, offline.calc.diasCriticos) : lastResponse?.justificacion}

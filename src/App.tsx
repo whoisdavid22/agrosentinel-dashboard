@@ -93,7 +93,16 @@ export default function App() {
 
           <main className="flex-1 min-w-0 overflow-y-auto p-5 sm:p-6">
             <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: 'easeOut' }}>
-                {tab === 'decision' && <DecisionTab lang={d.lang} lastResponse={d.lastResponse} offline={d.offline} logEntries={d.logEntries} />}
+                {tab === 'decision' && (
+                  <DecisionTab
+                    lang={d.lang}
+                    lastResponse={d.lastResponse}
+                    offline={d.offline}
+                    logEntries={d.logEntries}
+                    calibracion={d.calibracion}
+                    asignacionRed={d.asignacionRed}
+                  />
+                )}
                 {tab === 'valve3d' && <Valve3DTab lang={d.lang} pct={pct} />}
                 {tab === 'compare' && <CompareTab lang={d.lang} lastResponse={d.lastResponse} aguaAhorradaAcumulada={d.aguaAhorradaAcumulada} analisisAcumulados={d.analisisAcumulados} />}
                 {tab === 'predictions' && (
@@ -112,7 +121,17 @@ export default function App() {
                 )}
                 {tab === 'edge' && <EdgeTab lang={d.lang} applyEdgeCase={(name: keyof typeof EDGE_CASES) => d.applyEdgeCase(name)} isLoading={d.isLoading} />}
                 {tab === 'simulador' && <SimuladorTab lang={d.lang} currentData={d.currentData} />}
-                {tab === 'red' && <RedTab lang={d.lang} />}
+                {tab === 'red' && (
+                  <RedTab
+                    lang={d.lang}
+                    asignacionRed={d.asignacionRed}
+                    cargarAsignacionRed={d.cargarAsignacionRed}
+                    compartirConRed={d.compartirConRed}
+                    redCuenca={d.redCuenca}
+                    setRedCuenca={d.setRedCuenca}
+                    redShareStatus={d.redShareStatus}
+                  />
+                )}
                 {tab === 'historial' && (
                   <HistorialTab lang={d.lang} historial={d.historial} historialStatus={d.historialStatus} cargarHistorialReal={d.cargarHistorialReal} loggedIn={!!d.user} />
                 )}
