@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, Sparkles, Share2, CloudRain } from 'lucide-react';
+import { ChevronDown, Sparkles, Share2, CloudRain, AlertTriangle, Wrench } from 'lucide-react';
 import { PHOTOS_POR_ALERTA, MODEL_NAME } from '../../lib/constants';
 import { makeT, humanize, type Lang } from '../../lib/translations';
 import type { DecisionResponse, Calibracion, AsignacionRed } from '../../lib/types';
@@ -78,7 +78,31 @@ export default function DecisionTab({ lang, lastResponse, offline, logEntries, c
               </div>
               <p className="text-[11px] text-white/30 font-jetbrains mb-2">
                 {tr('decision.model')}: {MODEL_NAME}
+                {lastResponse?.herramientas_consultadas && lastResponse.herramientas_consultadas.length > 0 && !offline && (
+                  <span className="inline-flex items-center gap-1 ml-2 text-[#9a8cd8]">
+                    <Wrench size={10} />
+                    {tr('decision.toolsUsed')}: {lastResponse.herramientas_consultadas.map((h) => tr(`decision.tool.${h}` as never)).join(', ')}
+                  </span>
+                )}
               </p>
+
+              {lastResponse?.anomalia_sensor?.detectada && !offline && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.3 }}
+                  className="mb-4 rounded-lg bg-[#b8791f]/10 ring-1 ring-[#b8791f]/25 p-3 flex gap-2.5"
+                >
+                  <AlertTriangle size={16} className="shrink-0 text-[#b8791f] mt-0.5" />
+                  <p className="text-xs text-white/70 leading-relaxed">
+                    <b className="text-[#b8791f]">{tr('decision.anomaly.title')}</b>
+                    {' — '}
+                    {lastResponse.anomalia_sensor.tipo}
+                    <br />
+                    {lastResponse.anomalia_sensor.motivo}
+                  </p>
+                </motion.div>
+              )}
 
               <div className="flex flex-wrap gap-2 mb-4">
                 {calibracion && !offline && (

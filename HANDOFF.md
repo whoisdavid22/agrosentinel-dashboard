@@ -47,7 +47,7 @@ donde quedamos."*
 
 | Workflow | Qué hace | Estado |
 |---|---|---|
-| `Agente de estrés hidrico` (webhook `agente-hidrico`) | Flujo principal: FAO-56 + Claude decide. Ahora también lee/aplica/actualiza calibración por parcela. | ✅ Funciona, verificado en vivo |
+| `Agente de estrés hidrico` (webhook `agente-hidrico`) | Flujo principal: FAO-56 + Claude decide. Lee/aplica/actualiza calibración por parcela, pronóstico de lluvia (Open-Meteo), radiación NASA POWER — estas dos últimas gateadas por un triage previo donde Claude decide si las necesita. Detecta anomalías de sensor. | ✅ Funciona, verificado en vivo |
 | `Analisis de imagen` (webhook `analizar-imagen`) | Claude Vision analiza foto de dron | ✅ Arreglado y funciona (ver bugs abajo) |
 | `Asistente AgroSentinel` (webhook `copiloto-agrosentinel`) | Copiloto de chat | No tocado esta sesión |
 | `Red compartir` (webhook `red-compartir`) | Guarda cada lectura compartida en tabla `RedParcelas` | ✅ Funciona, verificado en vivo |
@@ -132,10 +132,10 @@ pestaña Decisión cuando hay suficientes lecturas. Verificado con ETc real
 cambiando de 3.58 a 3.86 mm/día al aplicarse el factor.
 
 ### Innovación 2 — Coordinación multi-parcela de agua compartida
-**n8n completo y verificado.** Dashboard: código escrito y compila limpio,
-pero bloqueado por el bug de RLS de arriba — sin eso, la pestaña "Red de
-Parcelas" y el badge en Decisión no van a mostrar datos aunque todo lo demás
-funcione.
+**Completa.** n8n verificado con 2 usuarios compitiendo por agua (urgente
+100%, con margen 20%). Bug de RLS en `RedParcelas` resuelto — ver sección
+arriba. Dashboard: pestaña "Red de Parcelas" y badge azul en Decisión
+funcionando con datos reales.
 
 ### Innovación 3 — Ventana de riego con pronóstico
 **Completa y verificada end-to-end en producción real (23 agosto 2026).**
@@ -163,6 +163,54 @@ Bugs encontrados y arreglados durante la implementación (ver también
 bien pero no se agregó a la concatenación final del `prompt` (variable
 computada y nunca usada); y faltaba una coma entre `ventana_riego` y
 `dias_sin_intervencion` en el texto del esquema JSON mostrado a Claude.
+
+### Innovación 4 — Detección de anomalías de sensor + tool-calling autónomo
+**Completa y verificada end-to-end en producción real (23-24 agosto 2026).**
+Dos piezas nuevas, ambas en el workflow `Agente de estrés hidrico`:
+
+**Anomalía de sensor** (solo `PromptBuilder`, sin nodos nuevos): se agregó
+el campo `anomalia_sensor` (`detectada`, `tipo`, `motivo`) al esquema JSON
+que Claude debe devolver, con instrucciones para detectar contradicciones
+físicas entre variables (ej. NDVI alto + humedad crítica sostenida = sensor
+posiblemente fallando). Verificado con el edge case `ndvi_alto_hum_baja`
+del dashboard (NDVI 0.75, humedad 19%, 11 días sin lluvia) → detecta la
+contradicción y baja confianza a MEDIA explicando por qué. Con datos
+coherentes, `detectada:false` sin falsos positivos.
+
+**Tool-calling real (el agente decide qué consultar)**: antes de la
+decisión final, un nuevo paso `Preparar Triage` → `Triage con Claude`
+(llamada a la API de Anthropic con `tools` definidas) → `Interpretar
+herramientas elegidas` deja que Claude pida (o no) `consultar_pronostico_lluvia`
+y `consultar_radiacion_solar_nasa` según el caso. Dos nuevos nodos `If
+Radiacion` / `If Pronostico` gatean las llamadas reales a Open-Meteo/NASA
+POWER según lo que Claude realmente pidió (ya no se llaman siempre que hay
+lat/lon). El campo `herramientas_consultadas` viaja intacto por `Aplicar
+valores por defecto` → `PromptBuilder` → `Calculos` hasta la respuesta
+final. Verificado con curl: cambia el comportamiento real (Claude decidió
+CERRAR la válvula citando el pronóstico que él mismo pidió consultar).
+Dashboard: chip 🔧 "Consultó: radiación solar NASA, pronóstico de lluvia"
+junto al nombre del modelo en la pestaña Decisión.
+
+Como esto agrega una segunda llamada completa a Claude antes de la
+decisión final, el timeout del fetch en `useDashboard.ts` subió de 20s a
+40s (`fetchData`) — con 20s el dashboard tiraba "Tiempo de espera agotado"
+aunque n8n sí terminaba bien (~22-24s típico con lat/lon).
+
+Bugs de n8n encontrados y arreglados (ver también "Errores recurrentes"):
+1. El toggle **"Convert types where required"** en un nodo `If` no es
+   quirúrgico — al activarlo para arreglar una condición booleana, también
+   afecta las demás condiciones del mismo grupo, causando que `undefined`
+   se convierta en un string no-vacío y rompa el chequeo `is not empty` de
+   `lat`. Arreglo real: dejar el toggle apagado y envolver cada expresión
+   en `!!(...)` para forzar boolean real, cambiando el tipo del campo a
+   Boolean explícitamente.
+2. Insertar un nodo nuevo (`Preparar Triage`/`Interpretar herramientas
+   elegidas`) delante de un nodo existente en la cadena rompe cualquier
+   referencia `$json.algo` en ese nodo existente que asumía cuál era su
+   predecesor directo — pasó con `NASA Power`, que usaba `$json.query.lat`
+   en vez de `$('Webhook').first().json.query.lat`. Siempre usar la
+   referencia explícita al nodo, nunca `$json` a secas, especialmente en
+   nodos que podrían quedar más abajo en la cadena en el futuro.
 
 ### Bug real arreglado: análisis de imagen de dron
 El nodo "Respond to Webhook" en `Analisis de imagen` tenía `JSON.stringify()`
@@ -218,5 +266,16 @@ entrar con `claude.verify.20260823@mailinator.com` / `Agro-Verify-2026!`.
 ## Estado de build
 
 `tsc -b --noEmit`, `oxlint`, y `npm run build` pasan limpio en ambos
-proyectos a fecha de este commit. Último commit en `Dashboard`:
-`2af5d8a — Wire dashboard to the real Red de Parcelas backend`.
+proyectos a fecha de este commit.
+
+## Pendiente / ideas futuras
+
+Todas las innovaciones planeadas para la presentación (28 agosto 2026)
+están completas y verificadas: auto-calibración, red de agua compartida,
+ventana de riego con pronóstico, y anomalía de sensor + tool-calling
+autónomo. Si sobra tiempo antes de la presentación: pulir el bug pendiente
+de `Red Stats` (ver tabla de workflows arriba), o considerar una tercera
+tool para el triage (ej. `consultar_calibracion_historica`, descartada
+esta sesión por ser una lectura interna barata sin mucho valor demostrativo
+frente a las llamadas externas costosas que sí vale la pena mostrar que el
+agente elige on-demand).

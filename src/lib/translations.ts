@@ -204,6 +204,12 @@ const dict = {
     'forecast.wait': (h: number) => `Lluvia en ~${h}h · mejor esperar`,
     'forecast.now': 'Sin lluvia próxima · buena ventana para regar',
 
+    // Anomalía de sensor y selección autónoma de herramientas
+    'decision.anomaly.title': 'Posible anomalía de sensor',
+    'decision.toolsUsed': 'Consultó',
+    'decision.tool.pronostico_lluvia': 'pronóstico de lluvia',
+    'decision.tool.radiacion_solar': 'radiación solar NASA',
+
     // Historial
     'hist.title': 'Historial real (todas tus sesiones)',
     'hist.refresh': 'Actualizar',
@@ -436,6 +442,12 @@ const dict = {
     // Forecast-aware irrigation window
     'forecast.wait': (h: number) => `Rain in ~${h}h · better to wait`,
     'forecast.now': 'No rain expected soon · good window to irrigate',
+
+    // Sensor anomaly and autonomous tool selection
+    'decision.anomaly.title': 'Possible sensor anomaly',
+    'decision.toolsUsed': 'Checked',
+    'decision.tool.pronostico_lluvia': 'rain forecast',
+    'decision.tool.radiacion_solar': 'NASA solar radiation',
 
     'hist.title': 'Real history (all your sessions)',
     'hist.refresh': 'Refresh',

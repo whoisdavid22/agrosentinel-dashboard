@@ -346,7 +346,7 @@ export function useDashboard() {
     setOffline(null);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 40000);
 
     try {
       const d = currentDataRef.current;
@@ -383,7 +383,7 @@ export function useDashboard() {
         res = await fetch(WEBHOOK_URL + '?' + params.toString(), { signal: controller.signal });
       } catch (networkErr) {
         if ((networkErr as Error).name === 'AbortError') {
-          throw { tipo: 'timeout', mensaje: 'n8n no respondió en 20 segundos.' } as FetchErrorInfo;
+          throw { tipo: 'timeout', mensaje: 'n8n no respondió en 40 segundos.' } as FetchErrorInfo;
         }
         throw { tipo: 'red', mensaje: 'No se pudo contactar a n8n.' } as FetchErrorInfo;
       }

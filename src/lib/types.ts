@@ -33,6 +33,12 @@ export interface VentanaRiego {
   motivo: string;
 }
 
+export interface AnomaliaSensor {
+  detectada: boolean;
+  tipo: string;
+  motivo: string;
+}
+
 export interface DecisionResponse {
   valvula: 'ABIERTA' | 'CERRADA';
   porcentaje_apertura?: number;
@@ -49,6 +55,8 @@ export interface DecisionResponse {
   taw_total_mm?: number;
   timestamp?: string;
   ventana_riego?: VentanaRiego;
+  anomalia_sensor?: AnomaliaSensor;
+  herramientas_consultadas?: string[];
 }
 
 export interface LogEntry {
