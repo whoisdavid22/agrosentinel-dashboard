@@ -1,4 +1,4 @@
-# AgroSentinel — Handoff (23 agosto 2026)
+# AgroSentinel — Handoff (24 agosto 2026)
 
 Documento para retomar el trabajo en una sesión nueva de Claude Code. Pégale
 esto a Claude al abrir: *"Lee HANDOFF.md en la carpeta Dashboard y sigamos
@@ -62,6 +62,7 @@ donde quedamos."*
 | `Red compartir` (webhook `red-compartir`) | Guarda cada lectura compartida en tabla `RedParcelas` | ✅ Funciona, verificado en vivo |
 | `Red Stats` (webhook `red-stats`) | Debería devolver estadísticas agregadas por cuenca | ❌ Devuelve 200 vacío, **sin depurar todavía** — mismo tipo de bug que los demás (probablemente header Authorization sin espacio, o Prefer/select mal puesto, o RLS). Pendiente. |
 | `Optimizar asignacion` (Schedule Trigger, sin webhook) | Cada cierto tiempo reparte agua entre parcelas de una misma cuenca por urgencia | ✅ Funciona, verificado con 2 usuarios compitiendo por agua — el urgente recibió 100%, el que tenía margen quedó en 20% |
+| `Telegram Agrosentinel` (webhook `telegram-agrosentinel`) | Recibe mensajes del bot de Telegram, corre un análisis real (última lectura guardada del usuario demo) y responde por Telegram con la decisión | ✅ Funciona, verificado en vivo (24 agosto) |
 | `4-red-parcelas` | Workflow duplicado que se creó por error al principio y se borró | Ya no existe |
 
 ## Tablas nuevas en Supabase (SQL ya corrido)
@@ -221,6 +222,56 @@ Bugs de n8n encontrados y arreglados (ver también "Errores recurrentes"):
    referencia explícita al nodo, nunca `$json` a secas, especialmente en
    nodos que podrían quedar más abajo en la cadena en el futuro.
 
+### Innovación 5 — Alerta y consulta por Telegram (agente actúa en el mundo real)
+**Completa y verificada end-to-end en producción real (24 agosto 2026).**
+Se descartó WhatsApp (Twilio pide tarjeta para el sandbox; Meta Cloud API
+también pide método de pago para mensajes iniciados por el negocio y el
+botón "Claim test number" no respondía) — Telegram Bot API es gratis, sin
+tarjeta, sin verificación de negocio, y llega al mismo resultado de demo.
+
+**Bot:** `@AgroSentinelbot`, token
+`8614520613:AAHzrW7b7LwIdnSd0hbesoWRn748B5UwNMo` (escrito a mano en los
+nodos HTTP, mismo patrón que las demás keys — no está en credenciales de
+n8n). Chat de prueba: David, `chat_id = 8997988050` (se obtiene una vez
+mandándole cualquier mensaje al bot y llamando `getUpdates`).
+
+**Saliente (alerta proactiva)** — 3 nodos nuevos en `Agente de estrés
+hidrico`, colgando en paralelo de `Calculos` (sin afectar la cadena
+principal que responde al dashboard):
+`Calculos` → `Preparar mensaje Telegram` (Code: arma texto y decide
+`disparar` si `nivel_alerta==='SEVERO'` o `anomalia_sensor.detectada`) →
+`If` (`{{ !!$json.disparar }}` is true) → `Enviar Telegram` (HTTP POST a
+`api.telegram.org/bot<token>/sendMessage`, body `{{ $json.body }}`).
+Verificado: mensaje real recibido en Telegram al forzar un caso SEVERO
+por curl.
+
+**Entrante (consultar por Telegram)** — workflow nuevo `Telegram
+Agrosentinel`, webhook registrado en Telegram vía `setWebhook`:
+`Webhook` (POST, **Respond: Immediately** para no hacer esperar a
+Telegram los ~20-24s del análisis) → `Extraer mensaje` (Code: saca
+`chat_id` y `texto` de `$json.body.message`) → `HTTP Request` (GET a
+Supabase `Lecturas`, última fila del usuario demo, **Always Output
+Data** activado) → `Armar parametros` (Code: arma el query string para
+`agente-hidrico`) → `HTTP Request1` (GET a `agente-hidrico` con esos
+parámetros — reusa el pipeline completo real, las 4 innovaciones
+incluidas) → `Formatear respuesta Telegram` (Code) → `HTTP Request2`
+(POST `sendMessage`). Verificado: mensaje real al bot → respuesta real
+con el análisis completo.
+
+Bugs encontrados y arreglados:
+1. **`URLSearchParams` no existe en el sandbox de Code nodes de n8n**
+   (a diferencia de un navegador o Node normal) — construir el query
+   string a mano con `Object.keys(...).map(...).join('&')` en vez de
+   `new URLSearchParams(...)`.
+2. **Cambios sin publicar se pierden si la sesión del navegador se cae**
+   (logout/login o reinicio de pestaña) — a diferencia de lo que parecía
+   antes, no hay autosave real entre sesiones nuevas. Publicar seguido,
+   no dejar nodos nuevos sin guardar por mucho tiempo.
+3. El timeout de 20s original del dashboard (antes de subir a 40s por la
+   Innovación 4) también aplicaba acá — no relevante para Telegram en sí
+   (Telegram no tiene ese límite), pero recordatorio de que el pipeline
+   completo tarda ~20-25s.
+
 ### Bug real arreglado: análisis de imagen de dron
 El nodo "Respond to Webhook" en `Analisis de imagen` tenía `JSON.stringify()`
 sobre `$json` en un campo que ya esperaba el objeto directo — se quitó, y el
@@ -291,10 +342,13 @@ proyectos a fecha de este commit.
 
 Todas las innovaciones planeadas para la presentación (28 agosto 2026)
 están completas y verificadas: auto-calibración, red de agua compartida,
-ventana de riego con pronóstico, y anomalía de sensor + tool-calling
-autónomo. Si sobra tiempo antes de la presentación: pulir el bug pendiente
-de `Red Stats` (ver tabla de workflows arriba), o considerar una tercera
-tool para el triage (ej. `consultar_calibracion_historica`, descartada
-esta sesión por ser una lectura interna barata sin mucho valor demostrativo
-frente a las llamadas externas costosas que sí vale la pena mostrar que el
-agente elige on-demand).
+ventana de riego con pronóstico, anomalía de sensor + tool-calling
+autónomo, y alerta/consulta por Telegram. Si sobra tiempo antes de la
+presentación: pulir el bug pendiente de `Red Stats` (ver tabla de
+workflows arriba), considerar una tercera tool para el triage (ej.
+`consultar_calibracion_historica`, descartada por ser una lectura interna
+barata sin mucho valor demostrativo frente a las llamadas externas
+costosas que sí vale la pena mostrar que el agente elige on-demand), o
+retomar WhatsApp si en algún momento se resuelve el tema de la tarjeta
+(el diseño ya está pensado, es el mismo patrón que Telegram — ver
+Innovación 5).
