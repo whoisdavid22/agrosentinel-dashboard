@@ -10,13 +10,22 @@ donde quedamos."*
   `https://whoisdavid22.github.io/` (root del sitio). Terminada, sin trabajo
   pendiente salvo que se pida algo nuevo.
 - **`Dashboard/`** — reconstrucción completa del dashboard real de
-  AgroSentinel (React/Vite/TS/Tailwind/Framer Motion + Three.js), en
-  desarrollo activo. **Todavía NO está desplegada** — solo existe local
-  (`npm run dev` / `npm run build`). El dashboard real y en vivo sigue siendo
-  el archivo HTML viejo en `https://whoisdavid22.github.io/agrosentinel/`.
-- Ambas carpetas son repos git **independientes** (no el repo gigante en
-  `C:\Users\jsala\.git` que abarca todo el home — ese se ignoró a propósito,
-  ver conversación anterior). `git log` en cada una tiene el historial real.
+  AgroSentinel (React/Vite/TS/Tailwind/Framer Motion + Three.js).
+  **Ya está desplegada y en vivo** en `https://whoisdavid22.github.io/agrosentinel/`
+  (desde 23-24 agosto 2026) — reemplazó al HTML viejo. Repo fuente:
+  `agrosentinel-dashboard`; para redeploy: `npm run build` en `Dashboard/`,
+  copiar `dist/` a la carpeta `agrosentinel/` del repo `whoisdavid22.github.io`
+  (repo aparte, ver abajo), commit y push. Local: `npm run dev` en `Dashboard/`.
+- Ambas carpetas (`Code/`, `Dashboard/`) son repos git **independientes**
+  (no el repo gigante en `C:\Users\jsala\.git` que abarca todo el home — ese
+  se ignoró a propósito). `git log` en cada una tiene el historial real.
+- El sitio en vivo (`https://whoisdavid22.github.io/`) es un **tercer repo
+  separado**, `whoisdavid22.github.io` (no confundir con `agrosentinel-landing`
+  ni `agrosentinel-dashboard`) — ahí vive literalmente el HTML/JS build final
+  que sirve GitHub Pages, tanto la raíz (landing) como `/agrosentinel/`
+  (dashboard). Clonado localmente en sesiones de deploy bajo `C:\tmp\wd-site`
+  (ruta corta a propósito — el path largo de OneDrive rompe `git clone` en
+  Windows por el límite de longitud de archivo).
 - El backend real vive en **n8n Cloud**:
   `https://innowgp13.app.n8n.cloud/projects/bcVIO0vqH1ZpV0s7/workflows`
   — Claude no tiene login ahí (no debe intentarlo). Todo el trabajo en n8n se
@@ -246,6 +255,16 @@ sesión):
 6. **Verificar SIEMPRE en el Table Editor de Supabase**, no solo confiar en
    la respuesta del webhook — varias veces la escritura sí funcionaba pero
    la respuesta al cliente estaba mal armada (o viceversa).
+7. **`signInWithOAuth` sin `redirectTo` explícito** hace que Supabase caiga
+   al "Site URL" del proyecto en vez de volver a la página que inició el
+   login — si la app vive en un subpath (`/agrosentinel/`) en vez de la raíz
+   del dominio, el token de acceso aterriza en el lugar equivocado y queda
+   en loop infinito de login. Arreglado pasando
+   `redirectTo: window.location.origin + window.location.pathname`, y
+   agregando `https://whoisdavid22.github.io/agrosentinel/**` a las
+   "Redirect URLs" permitidas en Supabase (Authentication → URL
+   Configuration) — el fix de código solo no alcanza si la URL no está en
+   esa lista blanca.
 
 ## Cómo verificar rápido sin depender del dashboard
 
