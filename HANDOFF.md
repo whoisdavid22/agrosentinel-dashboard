@@ -343,12 +343,39 @@ proyectos a fecha de este commit.
 Todas las innovaciones planeadas para la presentación (28 agosto 2026)
 están completas y verificadas: auto-calibración, red de agua compartida,
 ventana de riego con pronóstico, anomalía de sensor + tool-calling
-autónomo, y alerta/consulta por Telegram. Si sobra tiempo antes de la
-presentación: pulir el bug pendiente de `Red Stats` (ver tabla de
-workflows arriba), considerar una tercera tool para el triage (ej.
-`consultar_calibracion_historica`, descartada por ser una lectura interna
-barata sin mucho valor demostrativo frente a las llamadas externas
-costosas que sí vale la pena mostrar que el agente elige on-demand), o
-retomar WhatsApp si en algún momento se resuelve el tema de la tarjeta
-(el diseño ya está pensado, es el mismo patrón que Telegram — ver
-Innovación 5).
+autónomo, y alerta/consulta por Telegram.
+
+### 🔴 Pendiente inmediato (pedido 24 agosto): reportar datos por Telegram
+
+Ahora mismo `Telegram Agrosentinel` solo permite *consultar* — siempre usa
+la última lectura guardada en Supabase. Falta poder *reportar* una lectura
+nueva por mensaje y que el análisis corra remotamente con esos datos, no
+con los viejos.
+
+Diseño sugerido para la próxima sesión:
+1. Nodo nuevo después de `Extraer mensaje`: mandarle el texto del mensaje
+   a Claude (una llamada chica, prompt corto) pidiéndole que extraiga
+   `ndvi`, `temperatura_c`, `humedad_suelo_pct`, `precipitacion_mm`,
+   `dias_sin_lluvia` como JSON si el mensaje trae datos, o `null` si es
+   solo una consulta de estado — así el usuario puede escribir en
+   lenguaje natural ("la humedad está en 45% y no ha llovido en 6 días")
+   en vez de un formato rígido, coherente con el resto del proyecto
+   (mostrar que el agente entiende, no que parsea regex).
+2. Si vienen datos nuevos: usarlos directo para armar los parámetros de
+   `agente-hidrico` (saltar la consulta a `Lecturas`). Si no: seguir
+   como ahora, última lectura guardada.
+3. **Importante:** el webhook `agente-hidrico` en sí no guarda nada en
+   `Lecturas` — ese INSERT hoy solo pasa del lado del dashboard
+   (`guardarLecturaSupabase` en `useDashboard.ts`, client-side). Si se
+   reporta una lectura por Telegram, hay que agregar un nodo INSERT a
+   `Lecturas` en el workflow de Telegram después de recibir la decisión,
+   si no la próxima consulta por Telegram va a seguir viendo datos viejos.
+
+Si sobra tiempo después de eso: pulir el bug pendiente de `Red Stats`
+(ver tabla de workflows arriba), considerar una tercera tool para el
+triage (ej. `consultar_calibracion_historica`, descartada por ser una
+lectura interna barata sin mucho valor demostrativo frente a las llamadas
+externas costosas que sí vale la pena mostrar que el agente elige
+on-demand), o retomar WhatsApp si en algún momento se resuelve el tema de
+la tarjeta (el diseño ya está pensado, es el mismo patrón que Telegram —
+ver Innovación 5).
