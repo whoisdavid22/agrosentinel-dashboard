@@ -42,7 +42,10 @@ export default function AuthScreen({ lang, onToggleLang }: AuthScreenProps) {
   }
 
   async function loginWithGoogle() {
-    await supabase.auth.signInWithOAuth({ provider: 'google' });
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + window.location.pathname },
+    });
   }
 
   return (
