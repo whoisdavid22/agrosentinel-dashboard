@@ -21,6 +21,7 @@ import MapTab from './components/tabs/MapTab';
 import EdgeTab from './components/tabs/EdgeTab';
 import SimuladorTab from './components/tabs/SimuladorTab';
 import RedTab from './components/tabs/RedTab';
+import TelegramTab from './components/tabs/TelegramTab';
 import HistorialTab from './components/tabs/HistorialTab';
 import ValidacionTab from './components/tabs/ValidacionTab';
 
@@ -130,6 +131,18 @@ export default function App() {
                     redCuenca={d.redCuenca}
                     setRedCuenca={d.setRedCuenca}
                     redShareStatus={d.redShareStatus}
+                  />
+                )}
+                {tab === 'telegram' && (
+                  <TelegramTab
+                    lang={d.lang}
+                    telegramVinculo={d.telegramVinculo}
+                    telegramCodigo={d.telegramCodigo}
+                    telegramGenerating={d.telegramGenerating}
+                    telegramStatus={d.telegramStatus}
+                    cargarVinculoTelegram={d.cargarVinculoTelegram}
+                    generarCodigoTelegram={d.generarCodigoTelegram}
+                    desvincularTelegram={d.desvincularTelegram}
                   />
                 )}
                 {tab === 'historial' && (

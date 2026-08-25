@@ -200,6 +200,21 @@ const dict = {
     'red.assigned': 'Asignado por la red',
     'red.refresh': 'Actualizar',
 
+    // Vinculación de Telegram
+    'telegram.intro': 'Vinculá tu cuenta con el bot de Telegram para poder reportar lecturas nuevas y consultar el estado de tu parcela por chat, con tus propios datos.',
+    'telegram.botHandle': 'Bot: @AgroSentinelbot',
+    'telegram.linked': 'Tu Telegram ya está vinculado',
+    'telegram.linkedSince': (fecha: string) => `Vinculado desde el ${fecha}`,
+    'telegram.notLinked': 'Todavía no vinculaste tu Telegram',
+    'telegram.generateBtn': 'Generar código',
+    'telegram.generating': 'Generando…',
+    'telegram.codeInstructions': 'Enviale este mensaje al bot en Telegram:',
+    'telegram.codeExpires': 'El código vence en 10 minutos.',
+    'telegram.refreshBtn': 'Ya lo vinculé, actualizar',
+    'telegram.genFailed': 'No se pudo generar el código. Intenta de nuevo.',
+    'telegram.unlinkBtn': 'Desvincular',
+    'telegram.unlinkFailed': 'No se pudo desvincular. Intenta de nuevo.',
+
     // Ventana de riego con pronóstico
     'forecast.wait': (h: number) => `Lluvia en ~${h}h · mejor esperar`,
     'forecast.now': 'Sin lluvia próxima · buena ventana para regar',
@@ -438,6 +453,21 @@ const dict = {
     'red.requested': 'Requested',
     'red.assigned': 'Assigned by the network',
     'red.refresh': 'Refresh',
+
+    // Telegram account linking
+    'telegram.intro': 'Link your account with the Telegram bot to report new readings and check your parcel status by chat, using your own data.',
+    'telegram.botHandle': 'Bot: @AgroSentinelbot',
+    'telegram.linked': 'Your Telegram is already linked',
+    'telegram.linkedSince': (fecha: string) => `Linked since ${fecha}`,
+    'telegram.notLinked': "You haven't linked your Telegram yet",
+    'telegram.generateBtn': 'Generate code',
+    'telegram.generating': 'Generating…',
+    'telegram.codeInstructions': 'Send this message to the bot on Telegram:',
+    'telegram.codeExpires': 'The code expires in 10 minutes.',
+    'telegram.refreshBtn': 'I linked it, refresh',
+    'telegram.genFailed': 'Could not generate the code. Try again.',
+    'telegram.unlinkBtn': 'Unlink',
+    'telegram.unlinkFailed': 'Could not unlink. Try again.',
 
     // Forecast-aware irrigation window
     'forecast.wait': (h: number) => `Rain in ~${h}h · better to wait`,

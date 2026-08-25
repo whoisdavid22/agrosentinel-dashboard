@@ -1,4 +1,4 @@
-import { Droplets, Box, Globe2, TrendingUp, BarChart3, Map, Zap, FlaskConical, Share2, History, Satellite } from 'lucide-react';
+import { Droplets, Box, Globe2, TrendingUp, BarChart3, Map, Zap, FlaskConical, Share2, History, Satellite, Send } from 'lucide-react';
 
 // Ordered by importance to the user's decision-making, not by build order.
 // Válvula 3D is a visual/decorative view (the left panel already shows a
@@ -14,6 +14,7 @@ export const TABS = [
   { id: 'simulador', label: 'Simulador', icon: FlaskConical },
   { id: 'edge', label: 'Casos límite', icon: Zap },
   { id: 'red', label: 'Red de Parcelas', icon: Share2 },
+  { id: 'telegram', label: 'Telegram', icon: Send },
   { id: 'valve3d', label: 'Válvula 3D', icon: Box },
 ] as const;
 

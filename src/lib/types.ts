@@ -95,3 +95,8 @@ export interface AsignacionRed {
   motivo_asignacion: string | null;
   created_at: string;
 }
+
+export interface TelegramVinculo {
+  chat_id: number;
+  vinculado_at: string;
+}

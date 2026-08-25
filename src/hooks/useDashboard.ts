@@ -10,7 +10,7 @@ import {
   SHARED_SHARE_URL,
 } from '../lib/constants';
 import { calcularFAO56Local, computePredictions, type Predictions } from '../lib/faoCalc';
-import type { CurrentData, DecisionResponse, LogEntry, FetchErrorInfo, ImageZone, Calibracion, AsignacionRed } from '../lib/types';
+import type { CurrentData, DecisionResponse, LogEntry, FetchErrorInfo, ImageZone, Calibracion, AsignacionRed, TelegramVinculo } from '../lib/types';
 import type { User } from '@supabase/supabase-js';
 import { t, type Lang } from '../lib/translations';
 
@@ -117,6 +117,11 @@ export function useDashboard() {
   const [asignacionRed, setAsignacionRed] = useState<AsignacionRed | null>(null);
   const [redCuenca, setRedCuenca] = useState('');
   const [redShareStatus, setRedShareStatus] = useState('');
+
+  const [telegramVinculo, setTelegramVinculo] = useState<TelegramVinculo | null>(null);
+  const [telegramCodigo, setTelegramCodigo] = useState<string | null>(null);
+  const [telegramGenerating, setTelegramGenerating] = useState(false);
+  const [telegramStatus, setTelegramStatus] = useState('');
 
   const [lang, setLang] = useState<Lang>('es');
 
@@ -339,6 +344,53 @@ export function useDashboard() {
     },
     [user, lang, offline, lastResponse, cargarAsignacionRed],
   );
+
+  // ---- Vinculación de Telegram: liga el chat_id del bot a este usuario ----
+  const cargarVinculoTelegram = useCallback(async () => {
+    if (!user) {
+      setTelegramVinculo(null);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.from('TelegramVinculos').select('chat_id,vinculado_at').eq('user_id', user.id).maybeSingle();
+      if (error) throw error;
+      setTelegramVinculo(data as TelegramVinculo | null);
+    } catch {
+      setTelegramVinculo(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    cargarVinculoTelegram();
+  }, [cargarVinculoTelegram]);
+
+  const generarCodigoTelegram = useCallback(async () => {
+    if (!user) return;
+    setTelegramGenerating(true);
+    setTelegramStatus('');
+    try {
+      const codigo = String(Math.floor(100000 + Math.random() * 900000));
+      const { error } = await supabase.from('TelegramCodigos').insert({ codigo, user_id: user.id });
+      if (error) throw error;
+      setTelegramCodigo(codigo);
+    } catch {
+      setTelegramStatus(t(lang, 'telegram.genFailed'));
+    } finally {
+      setTelegramGenerating(false);
+    }
+  }, [user, lang]);
+
+  const desvincularTelegram = useCallback(async () => {
+    if (!user || !telegramVinculo) return;
+    try {
+      const { error } = await supabase.from('TelegramVinculos').delete().eq('user_id', user.id);
+      if (error) throw error;
+      setTelegramVinculo(null);
+      setTelegramCodigo(null);
+    } catch {
+      setTelegramStatus(t(lang, 'telegram.unlinkFailed'));
+    }
+  }, [user, lang, telegramVinculo]);
 
   const fetchData = useCallback(async () => {
     if (isLoading) return;
@@ -650,6 +702,13 @@ export function useDashboard() {
     redCuenca,
     setRedCuenca,
     redShareStatus,
+    telegramVinculo,
+    telegramCodigo,
+    telegramGenerating,
+    telegramStatus,
+    cargarVinculoTelegram,
+    generarCodigoTelegram,
+    desvincularTelegram,
     lang,
     setLang,
     demoRunning,
