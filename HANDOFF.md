@@ -60,7 +60,7 @@ donde quedamos."*
 | `Analisis de imagen` (webhook `analizar-imagen`) | Claude Vision analiza foto de dron | ✅ Arreglado y funciona (ver bugs abajo) |
 | `Asistente AgroSentinel` (webhook `copiloto-agrosentinel`) | Copiloto de chat | No tocado esta sesión |
 | `Red compartir` (webhook `red-compartir`) | Guarda cada lectura compartida en tabla `RedParcelas` | ✅ Funciona, verificado en vivo |
-| `Red Stats` (webhook `red-stats`) | Debería devolver estadísticas agregadas por cuenca | ❌ Devuelve 200 vacío, **sin depurar todavía** — mismo tipo de bug que los demás (probablemente header Authorization sin espacio, o Prefer/select mal puesto, o RLS). Pendiente. |
+| `Red Stats` (webhook `red-stats`, GET) | Devuelve estadísticas agregadas por cuenca (lecturas, humedad promedio, NDVI promedio de los últimos 30 días) | ✅ Arreglado y funciona (25 agosto, ver detalle abajo) |
 | `Optimizar asignacion` (Schedule Trigger, sin webhook) | Cada cierto tiempo reparte agua entre parcelas de una misma cuenca por urgencia | ✅ Funciona, verificado con 2 usuarios compitiendo por agua — el urgente recibió 100%, el que tenía margen quedó en 20% |
 | `Telegram Agrosentinel` (webhook `telegram-agrosentinel`) | Recibe mensajes del bot de Telegram; si el mensaje reporta datos nuevos en lenguaje natural (extraídos por Claude) corre el análisis con esos datos y los guarda en `Lecturas`, si no usa la última lectura guardada; responde por Telegram con la decisión | ✅ Funciona, verificado en vivo (24-25 agosto) |
 | `4-red-parcelas` | Workflow duplicado que se creó por error al principio y se borró | Ya no existe |
@@ -448,22 +448,47 @@ Bugs nuevos encontrados y arreglados en el proceso (ver también
   (leer la API es de solo lectura, nunca se bloquea) en vez de confiar en
   la vista del canvas, que a este zoom es fácil de leer mal.
 
+### ✅ Resuelto (25 agosto 2026): `Red Stats` devolvía 200 vacío
+
+Causa real: el nodo `Get row(s) in sheet` leía de una hoja de Google
+Sheets (`AgroSentinel Red`) que quedó abandonada desde antes de que el
+proyecto migrara la funcionalidad de "red compartida" a la tabla
+`RedParcelas` de Supabase — nunca le llegaban datos ahí, por eso la
+agregación siempre daba `cuencas: [], total_lecturas: 0`. No era ningún
+bug de headers/RLS como los otros, era simplemente la fuente de datos
+equivocada.
+
+**Fix:** se reemplazó el nodo de Google Sheets por un `HTTP Request` GET
+a `RedParcelas` (con la `service_role` key, mismo patrón que el resto del
+proyecto — reconstruido duplicando `Insertar Lectura` del workflow de
+Telegram para no re-tipear el secreto, igual que en el fix anterior). El
+`Code in JavaScript` que agrega por cuenca solo necesitó un cambio
+mínimo: `r.timestamp` → `r.created_at` (el resto de los nombres de campo
+ya coincidían con las columnas reales de `RedParcelas`). Verificado con
+`curl -X GET https://innowgp13.app.n8n.cloud/webhook/red-stats` en
+producción real → devuelve datos reales agregados (ej. cuenca
+`tanque-norte`, 5 lecturas, humedad promedio 32%, NDVI promedio 0.51).
+
+### ✅ Limpieza (25 agosto 2026): fila de basura en `Lecturas`
+
+La fila id 88 (con los valores por defecto, creada durante el debugging
+del fix de la key `anon`) se borró de producción. Se usó el mismo truco
+de duplicar un nodo con la `service_role` key ya pegada (`Insertar
+Lectura` → duplicado temporal reconfigurado como `DELETE
+.../Lecturas?id=eq.88`, ejecutado una vez vía "Execute step" —
+confirmado `204 No Content` — y luego borrado del workflow). No quedó
+ningún nodo extra en producción.
+
 ## Pendiente / ideas futuras
 
 Todas las innovaciones planeadas para la presentación (28 agosto 2026)
 están completas y verificadas: auto-calibración, red de agua compartida,
 ventana de riego con pronóstico, anomalía de sensor + tool-calling
 autónomo, y alerta/consulta/reporte por Telegram — incluyendo el fix del
-25 agosto de la lectura real por Telegram.
+25 agosto de la lectura real por Telegram. `Red Stats` también arreglado
+y la base de datos limpia, sin pendientes conocidos.
 
-Nota de limpieza menor: durante el debugging del 25 agosto quedó una
-fila de basura en `Lecturas` (id 88, valores todos por defecto) del
-usuario demo — no afecta nada funcionalmente (ya quedó tapada por
-lecturas reales posteriores), se puede borrar del Table Editor si se
-quiere prolijidad antes de la demo.
-
-Si sobra tiempo: pulir el bug pendiente de `Red Stats` (ver tabla de
-workflows arriba), considerar una tercera tool para el triage (ej.
+Si sobra tiempo: considerar una tercera tool para el triage (ej.
 `consultar_calibracion_historica`, descartada por ser una lectura
 interna barata sin mucho valor demostrativo frente a las llamadas
 externas costosas que sí vale la pena mostrar que el agente elige
