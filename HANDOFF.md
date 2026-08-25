@@ -4,6 +4,24 @@ Documento para retomar el trabajo en una sesión nueva de Claude Code. Pégale
 esto a Claude al abrir: *"Lee HANDOFF.md en la carpeta Dashboard y sigamos
 donde quedamos."*
 
+## 🔴 EN PROGRESO AHORA MISMO (25 agosto, sesión cortada por límite de contexto)
+
+Se está construyendo la **vinculación de cuentas de Telegram** (cada usuario
+del dashboard vincula su propio chat_id, en vez de que todos compartan la
+parcela demo) + comandos `/estado`, `/ayuda`, `/vincular`, `/reportar`. Ver
+sección completa **"🔨 Vinculación de Telegram (EN CONSTRUCCIÓN)"** más abajo
+— tiene el diseño completo, qué está hecho, y el plan nodo-por-nodo exacto
+para terminar. **Leer esa sección antes que nada más si el pedido es seguir
+con esto.**
+
+Estado en una línea: dashboard (React) terminado y commiteado; SQL de
+Supabase entregado al usuario, **confirmar si ya lo corrió**; workflow de
+n8n `Telegram Agrosentinel` a la mitad — el borrador (draft) tiene nodos
+nuevos sin terminar de conectar, pero **la versión publicada/activa sigue
+siendo la de antes, intacta y funcionando en producción** (no se tocó
+Publish desde que se empezó esta feature), así que el bot real no se rompió
+mientras se construye.
+
 ## Dónde vive cada cosa
 
 - **`Code/`** — landing page cinematográfica (React/Vite), ya publicada en
@@ -479,14 +497,272 @@ Lectura` → duplicado temporal reconfigurado como `DELETE
 confirmado `204 No Content` — y luego borrado del workflow). No quedó
 ningún nodo extra en producción.
 
-## Pendiente / ideas futuras
+## 🔨 Vinculación de Telegram (EN CONSTRUCCIÓN — pedido 25 agosto, tarde)
+
+**Por qué:** hasta ahora, cualquiera que le escriba al bot lee/escribe
+sobre la misma parcela demo (`user_id` hardcodeado). El usuario pidió que
+cada quien vincule su propio chat_id con su cuenta real del dashboard, más
+comandos (`/estado`, `/ayuda`, `/vincular`, y poder reportar con
+`/reportar <texto>` además del mensaje libre de siempre).
+
+**Diseño acordado con el usuario** (eligió explícitamente la opción
+"completa" cuando se le preguntó): desde el dashboard, el usuario logueado
+genera un código de 6 dígitos de un solo uso; se lo manda al bot como
+`/vincular 123456`; n8n valida el código y graba `chat_id ↔ user_id` en
+Supabase. De ahí en adelante ese chat ya "es" ese usuario para todo:
+reportar, consultar, todo usa su `user_id` real en vez del hardcodeado.
+
+### ✅ Ya hecho
+
+1. **SQL de Supabase** — entregado al usuario como archivo para correr en
+   el SQL Editor (dos tablas nuevas + políticas RLS + un INSERT que
+   pre-vincula el chat_id de prueba de David con la cuenta demo). **Falta
+   confirmar si ya lo corrió** — si no, nada de esto va a funcionar hasta
+   que lo haga. El SQL exacto:
+
+   ```sql
+   create table "TelegramCodigos" (
+     codigo text primary key,
+     user_id uuid references auth.users(id) not null,
+     creado_at timestamptz not null default now(),
+     usado boolean not null default false
+   );
+   alter table "TelegramCodigos" enable row level security;
+   create policy "cada quien gestiona sus propios codigos" on "TelegramCodigos"
+     for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+   create table "TelegramVinculos" (
+     chat_id bigint primary key,
+     user_id uuid references auth.users(id) not null,
+     vinculado_at timestamptz not null default now()
+   );
+   alter table "TelegramVinculos" enable row level security;
+   create policy "cada quien ve su propio vinculo" on "TelegramVinculos"
+     for select using (auth.uid() = user_id);
+   create policy "cada quien borra su propio vinculo" on "TelegramVinculos"
+     for delete using (auth.uid() = user_id);
+
+   insert into "TelegramVinculos" (chat_id, user_id)
+   values (8997988050, '65002887-a20e-40e1-8689-7f86c00372ba');
+   ```
+
+2. **Dashboard (React) — terminado, commiteado (`b769980`), `tsc`/`oxlint`/
+   `build` pasan limpio, probado en el navegador con el dev server (el
+   botón "Generar código" mostró el error controlado esperado porque la
+   tabla todavía no existía en ese momento — la lógica del fetch está
+   bien).** Nueva pestaña "Telegram" (`src/components/tabs/TelegramTab.tsx`,
+   ícono `Send` de lucide-react) con: estado vinculado/no vinculado (lee
+   `TelegramVinculos` filtrando por `user_id`), botón "Generar código"
+   (inserta en `TelegramCodigos`), botón "Desvincular" (borra de
+   `TelegramVinculos`). Todo el estado/lógica vive en
+   `useDashboard.ts` (`telegramVinculo`, `telegramCodigo`,
+   `cargarVinculoTelegram`, `generarCodigoTelegram`,
+   `desvincularTelegram`). Traducciones ES/EN en `translations.ts` bajo
+   `telegram.*`. **No hace falta tocar nada más acá** — falta solo
+   deployar cuando el n8n esté listo (ver "Cómo redeploy" al inicio del
+   doc).
+
+3. **n8n — a medio construir.** Todo lo de abajo vive en el **borrador**
+   (draft) del workflow `Telegram Agrosentinel`
+   (`Z4qV9UkL5ooIi2v6`) — **nunca se publicó**, así que el bot en
+   producción sigue corriendo la versión de antes (14 nodos, sin nada de
+   esto) sin problema. Nodos ya creados y conectados, en este orden desde
+   `Extraer mensaje`:
+
+   - **`Buscar vinculo`** (HTTP GET, `service_role` key ya pegada) →
+     `https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/TelegramVinculos?chat_id=eq.{{ $json.chat_id }}&select=user_id`,
+     Always Output Data ON.
+   - **`Detectar comando`** (Code) — lee el array/objeto de arriba
+     (mismo patrón defensivo array-vs-objeto-plano que ya se usó en
+     `Armar parametros`), y separa por `/vincular`, `/estado`,
+     `/ayuda`/`/start`, `/reportar <texto>` (si trae texto se trata como
+     reporte normal; si no, como `/ayuda`), o mensaje libre. Calcula un
+     campo `ruta` final combinando si está vinculado o no:
+     `vincular` | `no_vinculado` | `ya_vinculado` | `ayuda` | `estado` |
+     `mensaje`. Devuelve `{ chat_id, texto, vinculado, user_id, ruta }`.
+     **Código completo ya escrito y funcionando, copiarlo tal cual si hay
+     que reconstruir:**
+     ```js
+     const previo = $input.first().json;
+     const { chat_id, texto } = $('Extraer mensaje').first().json;
+
+     let fila;
+     if (Array.isArray(previo)) {
+       fila = previo[0] || null;
+     } else {
+       fila = previo && Object.keys(previo).length ? previo : null;
+     }
+
+     const vinculado = !!fila;
+     const userId = fila ? fila.user_id : null;
+
+     const t = (texto || '').trim();
+     let tipo = 'mensaje';
+     let textoFinal = texto;
+
+     if (/^\/vincular\b/i.test(t)) {
+       tipo = 'vincular';
+       textoFinal = t.replace(/^\/vincular\s*/i, '').trim();
+     } else if (/^\/estado\b/i.test(t)) {
+       tipo = 'estado';
+     } else if (/^\/ayuda\b/i.test(t) || /^\/start\b/i.test(t)) {
+       tipo = 'ayuda';
+     } else if (/^\/reportar\b/i.test(t)) {
+       const resto = t.replace(/^\/reportar\s*/i, '').trim();
+       if (resto) {
+         tipo = 'mensaje';
+         textoFinal = resto;
+       } else {
+         tipo = 'ayuda';
+       }
+     }
+
+     let ruta;
+     if (!vinculado) {
+       ruta = tipo === 'vincular' ? 'vincular' : 'no_vinculado';
+     } else if (tipo === 'vincular') {
+       ruta = 'ya_vinculado';
+     } else if (tipo === 'ayuda') {
+       ruta = 'ayuda';
+     } else if (tipo === 'estado') {
+       ruta = 'estado';
+     } else {
+       ruta = 'mensaje';
+     }
+
+     return [{ json: { chat_id, texto: textoFinal, vinculado, user_id: userId, ruta } }];
+     ```
+   - Cadena de nodos **`If`** encadenados (cada uno compara
+     `{{ $('Detectar comando').first().json.ruta }}` "is equal to" un
+     string fijo — operador string default, no hace falta tocar el
+     dropdown de Boolean como en otros `If` de este proyecto):
+     `If ruta vincular` (`vincular`) → FALSE → `If ruta no_vinculado`
+     (`no_vinculado`) → FALSE → `If ruta ya_vinculado` (`ya_vinculado`) →
+     FALSE → un 5º nodo **todavía sin terminar, se llama literalmente
+     `If`** (id `58f1a770-28ce-449a-8169-18f84d6baac8`, posición
+     `[1456,48]`) — **acá quedó cortada la sesión, condición vacía sin
+     configurar.**
+
+### 🔧 Falta por hacer (plan exacto, nodo por nodo)
+
+1. **Terminar el 5º If** (el que quedó sin nombre): condición
+   `{{ $('Detectar comando').first().json.ruta }}` is equal to `ayuda`.
+   Renombrar a `If ruta ayuda`.
+   - TRUE → nodo nuevo `Responder ayuda` (Code) → conectar a
+     `HTTP Request2` (el nodo que ya existe y manda el mensaje real a
+     Telegram — dejarlo intacto, solo agregarle esta conexión extra,
+     mismo patrón "diamante" que ya se usa en el resto del workflow).
+   - FALSE → nodo nuevo `If ruta estado` (If): condición `ruta` is equal
+     to `estado`.
+     - TRUE → conectar al nodo **ya existente** `HTTP Request` (el GET a
+       `Lecturas`, el mismo que ya usa la rama "consulta sin datos
+       nuevos" de `If hay datos nuevos`) — no crear uno nuevo, solo
+       agregar esta conexión extra (patrón diamante).
+     - FALSE (o sea `ruta === 'mensaje'`) → conectar al nodo **ya
+       existente** `Preparar extraccion` (el que arranca la cadena de
+       extracción con Claude) — tampoco crear nodo nuevo.
+
+2. **Cadena `/vincular`** — colgando del TRUE de `If ruta vincular`
+   (todavía sin nada conectado ahí):
+   - `Verificar codigo` (HTTP GET, duplicar `Insertar Lectura` o
+     `Buscar vinculo` para heredar la `service_role` key sin re-tipearla,
+     reconfigurar a GET) →
+     `https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/TelegramCodigos?codigo=eq.{{ $('Detectar comando').first().json.texto }}&usado=eq.false&creado_at=gte.{{ $now.minus({minutes:10}).toISO() }}&select=user_id`,
+     Always Output Data ON.
+   - `Procesar codigo` (Code):
+     ```js
+     const filas = $input.first().json;
+     const fila = Array.isArray(filas) ? (filas[0] || null) : (filas && Object.keys(filas).length ? filas : null);
+     return [{ json: {
+       valido: !!fila,
+       chat_id: $('Detectar comando').first().json.chat_id,
+       user_id: fila ? fila.user_id : null,
+       codigo: $('Detectar comando').first().json.texto,
+     } }];
+     ```
+   - `If codigo valido` (If, Boolean → operación "true" en
+     `{{ !!$json.valido }}` — **este sí necesita el fix del dropdown de
+     Boolean**, ver bug #11 en `n8n_debugging_patterns` en memoria).
+     - TRUE →
+       `Crear vinculo` (HTTP POST, duplicar un nodo con `service_role` ya
+       pegada) → `https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/TelegramVinculos`,
+       body JSON `{{ { "chat_id": $json.chat_id, "user_id": $json.user_id } }}`
+       (o armarlo en un Code previo tipo `Preparar insercion`, mismo
+       patrón ya usado) →
+       `Marcar codigo usado` (HTTP PATCH, misma key) →
+       `https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/TelegramCodigos?codigo=eq.{{ $('Procesar codigo').first().json.codigo }}`,
+       body `{"usado": true}` →
+       `Responder vinculado ok` (Code) → `HTTP Request2`.
+     - FALSE → `Responder codigo invalido` (Code) → `HTTP Request2`.
+
+3. **Respuestas simples** (cada una un Code node que arma
+   `{ json: { body: JSON.stringify({ chat_id: $('Detectar comando').first().json.chat_id, text: '...' }) } }`
+   y se conecta a `HTTP Request2`; usar `$('Procesar codigo')` para
+   chat_id en las que cuelgan de esa rama):
+   - `If ruta no_vinculado` TRUE → `Responder no vinculado`: explicar que
+     hay que ir al dashboard → pestaña Telegram → "Generar código", y
+     mandar `/vincular <codigo>`.
+   - `If ruta ya_vinculado` TRUE → `Responder ya vinculado`: avisar que
+     ese chat ya está vinculado, que para cambiar hay que desvincular
+     desde el dashboard primero.
+   - `If ruta ayuda` TRUE → `Responder ayuda`: explicar que puede
+     reportar en lenguaje natural o con `/reportar <texto>`, consultar
+     con `/estado`, y ver esta ayuda con `/ayuda`.
+
+4. **Hacer dinámico el `user_id`** en los 3 lugares que todavía lo tienen
+   hardcodeado a `65002887-a20e-40e1-8689-7f86c00372ba` — reemplazar por
+   `$('Detectar comando').first().json.user_id` (o la expresión
+   equivalente en el nodo HTTP):
+   - `Armar parametros` (Code) — también cambiar de dónde saca `chatId`
+     a `$('Detectar comando')` en vez de `$('Extraer mensaje')`, por
+     prolijidad (funciona igual con cualquiera de los dos, el chat_id no
+     cambia).
+   - `HTTP Request` (el GET a `Lecturas` reusado por `estado`) — la URL
+     hoy es texto fijo con el user_id pegado; hay que pasarla a modo
+     Expression e interpolar
+     `user_id=eq.{{ $('Detectar comando').first().json.user_id }}`.
+   - `Preparar insercion` (Code, arma el INSERT a `Lecturas`).
+
+5. **Probar todo con curl contra el webhook real** (`telegram-agrosentinel`,
+   una vez publicado) antes de dar por terminado: mensaje libre sin
+   vincular (debe pedir vincular), `/vincular <codigo-valido>`,
+   `/vincular <codigo-invalido>`, `/estado` ya vinculado, mensaje con
+   datos ya vinculado, `/reportar <texto>`, `/ayuda`. Revisar cada
+   ejecución con `/api/v1/executions/:id?includeData=true`, no confiar
+   solo en la respuesta del webhook (ver "Errores recurrentes").
+
+6. **Configurar los comandos en Telegram** (esto lo tiene que hacer el
+   usuario a mano, es mandarle un mensaje a `@BotFather` en su propio
+   Telegram — Claude no puede hacerlo): abrir chat con `@BotFather` →
+   `/setcommands` → elegir `@AgroSentinelbot` → pegar:
+   ```
+   estado - Ver el estado actual de tu parcela
+   reportar - Reportar una lectura nueva (o solo escribí en lenguaje natural)
+   vincular - Vincular este chat con tu cuenta del dashboard
+   ayuda - Cómo usar el bot
+   ```
+
+7. **Publicar el workflow** solo cuando todo lo anterior esté probado.
+
+8. **Deploy del dashboard**: `npm run build` en `Dashboard/`, copiar
+   `dist/` a la carpeta `agrosentinel/` del repo `whoisdavid22.github.io`
+   (ver "Dónde vive cada cosa" al inicio), commit y push — el código ya
+   está listo, solo falta este paso una vez que n8n también esté
+   terminado (para no deployar una pestaña que apunta a un backend a
+   medio construir).
 
 Todas las innovaciones planeadas para la presentación (28 agosto 2026)
 están completas y verificadas: auto-calibración, red de agua compartida,
 ventana de riego con pronóstico, anomalía de sensor + tool-calling
 autónomo, y alerta/consulta/reporte por Telegram — incluyendo el fix del
 25 agosto de la lectura real por Telegram. `Red Stats` también arreglado
-y la base de datos limpia, sin pendientes conocidos.
+y la base de datos limpia. La vinculación de cuentas de Telegram (arriba)
+es trabajo nuevo pedido esta misma tarde, no estaba en el alcance
+original de la presentación — evaluar si vale la pena terminarla antes
+del 28 o si el bot actual (con la parcela demo compartida) ya alcanza
+para la demo.
+
+## Pendiente / ideas futuras
 
 Si sobra tiempo: considerar una tercera tool para el triage (ej.
 `consultar_calibracion_historica`, descartada por ser una lectura
