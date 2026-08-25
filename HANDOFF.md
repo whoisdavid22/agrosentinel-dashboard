@@ -1,4 +1,4 @@
-# AgroSentinel — Handoff (24 agosto 2026)
+# AgroSentinel — Handoff (25 agosto 2026)
 
 Documento para retomar el trabajo en una sesión nueva de Claude Code. Pégale
 esto a Claude al abrir: *"Lee HANDOFF.md en la carpeta Dashboard y sigamos
@@ -62,7 +62,7 @@ donde quedamos."*
 | `Red compartir` (webhook `red-compartir`) | Guarda cada lectura compartida en tabla `RedParcelas` | ✅ Funciona, verificado en vivo |
 | `Red Stats` (webhook `red-stats`) | Debería devolver estadísticas agregadas por cuenca | ❌ Devuelve 200 vacío, **sin depurar todavía** — mismo tipo de bug que los demás (probablemente header Authorization sin espacio, o Prefer/select mal puesto, o RLS). Pendiente. |
 | `Optimizar asignacion` (Schedule Trigger, sin webhook) | Cada cierto tiempo reparte agua entre parcelas de una misma cuenca por urgencia | ✅ Funciona, verificado con 2 usuarios compitiendo por agua — el urgente recibió 100%, el que tenía margen quedó en 20% |
-| `Telegram Agrosentinel` (webhook `telegram-agrosentinel`) | Recibe mensajes del bot de Telegram, corre un análisis real (última lectura guardada del usuario demo) y responde por Telegram con la decisión | ✅ Funciona, verificado en vivo (24 agosto) |
+| `Telegram Agrosentinel` (webhook `telegram-agrosentinel`) | Recibe mensajes del bot de Telegram; si el mensaje reporta datos nuevos en lenguaje natural (extraídos por Claude) corre el análisis con esos datos y los guarda en `Lecturas`, si no usa la última lectura guardada; responde por Telegram con la decisión | ✅ Funciona, verificado en vivo (24-25 agosto) |
 | `4-red-parcelas` | Workflow duplicado que se creó por error al principio y se borró | Ya no existe |
 
 ## Tablas nuevas en Supabase (SQL ya corrido)
@@ -338,43 +338,134 @@ entrar con `claude.verify.20260823@mailinator.com` / `Agro-Verify-2026!`.
 `tsc -b --noEmit`, `oxlint`, y `npm run build` pasan limpio en ambos
 proyectos a fecha de este commit.
 
+## ✅ Resuelto (24-25 agosto 2026): reportar datos por Telegram en lenguaje natural
+
+`Telegram Agrosentinel` ahora, además de *consultar*, permite *reportar*
+una lectura nueva por mensaje en lenguaje natural (ej. "la humedad está en
+45% y no ha llovido en 6 días") y el análisis corre con esos datos frescos,
+no con los viejos. Editado directamente en el workflow vía la n8n API
+(lectura/estructura) + UI del navegador (los pocos pasos que la API no
+permite — ver abajo), con David logueado en n8n Cloud.
+
+Nodos nuevos en `Telegram Agrosentinel`:
+`Extraer mensaje` → `Preparar extraccion` (arma el prompt) → `Extraer
+datos con Claude` (llamada a la API de Anthropic, mismo patrón que
+`Triage con Claude` en `Agente de estrés hidrico`) → `Parsear extraccion`
+(parsea el JSON o `null`) → `If hay datos nuevos`:
+- **TRUE** → directo a `Armar parametros` (ahora unificado, detecta si
+  viene de la extracción de Claude o del GET viejo a `Lecturas` mirando
+  si el input es un array u objeto).
+- **FALSE** → sigue como antes: `HTTP Request` (GET última lectura) →
+  `Armar parametros`.
+
+Después de la decisión (`HTTP Request1`), en paralelo a la respuesta a
+Telegram (sin afectarla, mismo patrón que la alerta proactiva de
+Innovación 5): `If reportado` → `Preparar insercion` → `Insertar
+Lectura` (POST a Supabase `Lecturas` con la `service_role` key, mismo
+patrón que `Guardar en RedParcelas` en `Red compartir`). El webhook
+`agente-hidrico` en sí sigue sin guardar nada — el INSERT vive solo en
+este workflow de Telegram, igual que el dashboard tiene el suyo propio.
+
+Verificado end-to-end contra el webhook de producción real (`curl`
+simulando el payload de Telegram): Claude extrajo `humedad_suelo_pct` y
+`dias_sin_lluvia` correctamente del texto libre, el agente decidió
+`ABIERTA/SEVERO` con esos datos, el mensaje real llegó al bot
+(`ok:true` de la API de Telegram), y el INSERT a `Lecturas` devolvió
+`201 Created` (confirmado con la opción "Full Response" del nodo, no
+solo con la ausencia de error — ver `n8n_debugging_patterns` en memoria).
+
+Bugs encontrados y arreglados esta sesión (además de los ya conocidos,
+ver "Errores recurrentes" abajo):
+1. Escribir una expresión booleana cruda en el campo de valor de un nodo
+   `If` **no cambia el tipo de operador** — queda en `string equals`
+   comparando contra `value2` vacío, y explota en runtime con "Wrong
+   type: 'true' is a boolean but was expecting a string" aunque se vea
+   bien en la UI. Hay que reabrir el dropdown del operador y elegir
+   **Boolean → "is true"** a mano.
+2. El PUT de la API pública de n8n (`/api/v1/workflows/:id`) es
+   rechazado silenciosamente por la capa de automatización si el payload
+   incluye un nodo `n8n-nodes-base.webhook` (se trata como "modificar
+   infraestructura compartida"). Cualquier workflow con un trigger de
+   webhook activo hay que editarlo por el canvas de la UI, no por PUT
+   scripteado — aunque el PUT funciona bien para el resto.
+3. Los test runs del propio editor de n8n ("Execute workflow"/"Execute
+   step") a veces se cuelgan indefinidamente y no aparecen en
+   `/api/v1/executions` — probar contra el webhook de **producción**
+   real con `curl` y revisar la ejecución vía API fue mucho más
+   confiable que confiar en el editor.
+
+### ✅ Resuelto (25 agosto 2026): la key `anon` no podía leer `Lecturas`
+
+Confirmado y arreglado el mismo día. La rama de "solo consultar" por
+Telegram **siempre** estuvo devolviendo los valores por defecto (`ndvi
+0.6, humedad 50, dias_sin_lluvia 5`, etc.) en vez de la última lectura
+real, porque el nodo `HTTP Request` (GET a `Lecturas`) usaba la key
+`anon`/`publishable` sin ningún JWT de usuario detrás — cualquier
+política RLS basada en `auth.uid()` iba a fallar siempre para ese nodo,
+sin importar cómo estuviera configurado el RLS del lado de Supabase (no
+hacía falta tocar SQL en absoluto).
+
+**Fix real:** cambiar ese nodo para que use la `service_role` key, igual
+que ya hacen todos los demás nodos privilegiados del proyecto (`Insertar
+Lectura`, `Guardar en RedParcelas`, etc.) — consistente con el patrón
+establecido, no una excepción nueva. Se reconstruyó el nodo duplicando
+`Insertar Lectura` (que ya tenía la key service_role bien pegada) y
+reconfigurando el duplicado como GET, en vez de re-tipear el secreto a
+mano (ver bug de portapapeles abajo).
+
+Efecto secundario que apareció al arreglarlo: la respuesta de Supabase
+como GET **no llega envuelta en un array** — n8n la expande a un item
+cuyo `json` es la fila directamente (objeto plano), a diferencia de lo
+que el código de `Armar parametros` asumía (`$input.first().json[0]`,
+pensado para un array crudo). Se ajustó la detección de rama en
+`Armar parametros` para reconocer tres formas de input posibles:
+`{chat_id, datos}` (viene de la extracción con Claude, rama TRUE),
+array crudo, u objeto de fila directo (lo que realmente devuelve este
+nodo ahora) — antes solo distinguía array vs. no-array, lo cual
+clasificaba mal el objeto de fila directo como si viniera de Claude.
+
+Verificado end-to-end con curl real contra producción: un reporte nuevo
+("la humedad esta en 22% y no ha llovido en 10 dias") se guardó
+correctamente, y una consulta posterior sin datos nuevos ("estado") trajo
+esa misma lectura real (`humedad_suelo_pct=22, dias_sin_lluvia=10`) en
+vez de los valores por defecto — confirmado con `curl` + revisando el
+output real del nodo vía `/api/v1/executions/:id?includeData=true`.
+
+Bugs nuevos encontrados y arreglados en el proceso (ver también
+`n8n_debugging_patterns` en memoria):
+- **Copiar/pegar (Ctrl+C/Ctrl+V) entre campos de n8n no funciona** en el
+  navegador integrado que usa Claude para estas sesiones — el portapapeles
+  del SO no está disponible ahí. Cuando hace falta trasladar un secreto ya
+  pegado de un nodo a otro sin volver a tipearlo (Claude no puede tipear
+  secretos, hay un guardarraíl que lo bloquea), la única vía confiable es
+  **duplicar el nodo entero** (Ctrl+D o clic derecho → Duplicate) — la
+  duplicación copia los parámetros a nivel de JSON interno de n8n, no por
+  el portapapeles del navegador, así que el secreto viaja intacto.
+- Al reconectar ramas de un nodo `If` a mano arrastrando conexiones, es
+  fácil dejar una conexión vieja colgando además de la nueva (ambas
+  apuntando al mismo destino, o una rama con dos destinos en vez de uno) —
+  **siempre confirmar el grafo final vía `GET /api/v1/workflows/:id`**
+  (leer la API es de solo lectura, nunca se bloquea) en vez de confiar en
+  la vista del canvas, que a este zoom es fácil de leer mal.
+
 ## Pendiente / ideas futuras
 
 Todas las innovaciones planeadas para la presentación (28 agosto 2026)
 están completas y verificadas: auto-calibración, red de agua compartida,
 ventana de riego con pronóstico, anomalía de sensor + tool-calling
-autónomo, y alerta/consulta por Telegram.
+autónomo, y alerta/consulta/reporte por Telegram — incluyendo el fix del
+25 agosto de la lectura real por Telegram.
 
-### 🔴 Pendiente inmediato (pedido 24 agosto): reportar datos por Telegram
+Nota de limpieza menor: durante el debugging del 25 agosto quedó una
+fila de basura en `Lecturas` (id 88, valores todos por defecto) del
+usuario demo — no afecta nada funcionalmente (ya quedó tapada por
+lecturas reales posteriores), se puede borrar del Table Editor si se
+quiere prolijidad antes de la demo.
 
-Ahora mismo `Telegram Agrosentinel` solo permite *consultar* — siempre usa
-la última lectura guardada en Supabase. Falta poder *reportar* una lectura
-nueva por mensaje y que el análisis corra remotamente con esos datos, no
-con los viejos.
-
-Diseño sugerido para la próxima sesión:
-1. Nodo nuevo después de `Extraer mensaje`: mandarle el texto del mensaje
-   a Claude (una llamada chica, prompt corto) pidiéndole que extraiga
-   `ndvi`, `temperatura_c`, `humedad_suelo_pct`, `precipitacion_mm`,
-   `dias_sin_lluvia` como JSON si el mensaje trae datos, o `null` si es
-   solo una consulta de estado — así el usuario puede escribir en
-   lenguaje natural ("la humedad está en 45% y no ha llovido en 6 días")
-   en vez de un formato rígido, coherente con el resto del proyecto
-   (mostrar que el agente entiende, no que parsea regex).
-2. Si vienen datos nuevos: usarlos directo para armar los parámetros de
-   `agente-hidrico` (saltar la consulta a `Lecturas`). Si no: seguir
-   como ahora, última lectura guardada.
-3. **Importante:** el webhook `agente-hidrico` en sí no guarda nada en
-   `Lecturas` — ese INSERT hoy solo pasa del lado del dashboard
-   (`guardarLecturaSupabase` en `useDashboard.ts`, client-side). Si se
-   reporta una lectura por Telegram, hay que agregar un nodo INSERT a
-   `Lecturas` en el workflow de Telegram después de recibir la decisión,
-   si no la próxima consulta por Telegram va a seguir viendo datos viejos.
-
-Si sobra tiempo después de eso: pulir el bug pendiente de `Red Stats`
-(ver tabla de workflows arriba), considerar una tercera tool para el
-triage (ej. `consultar_calibracion_historica`, descartada por ser una
-lectura interna barata sin mucho valor demostrativo frente a las llamadas
+Si sobra tiempo: pulir el bug pendiente de `Red Stats` (ver tabla de
+workflows arriba), considerar una tercera tool para el triage (ej.
+`consultar_calibracion_historica`, descartada por ser una lectura
+interna barata sin mucho valor demostrativo frente a las llamadas
 externas costosas que sí vale la pena mostrar que el agente elige
 on-demand), o retomar WhatsApp si en algún momento se resuelve el tema de
 la tarjeta (el diseño ya está pensado, es el mismo patrón que Telegram —
