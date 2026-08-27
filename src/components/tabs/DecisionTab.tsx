@@ -26,6 +26,14 @@ export default function DecisionTab({ lang, lastResponse, offline, logEntries, c
   const tr = makeT(lang);
   const [reasoningOpen, setReasoningOpen] = useState(false);
 
+  const calibExplica = (() => {
+    if (!calibracion) return null;
+    const pct = Math.round((calibracion.kc_ajuste - 1) * 100);
+    if (pct > 0) return tr('decision.calibration.explica.more', pct, calibracion.muestras);
+    if (pct < 0) return tr('decision.calibration.explica.less', -pct, calibracion.muestras);
+    return tr('decision.calibration.explica.none', calibracion.muestras);
+  })();
+
   const level = offline ? offline.calc.nivel : lastResponse?.nivel_alerta;
   const photo = level ? PHOTOS_POR_ALERTA[lang][level] : PHOTOS_POR_ALERTA[lang].NORMAL;
 
@@ -146,6 +154,17 @@ export default function DecisionTab({ lang, lastResponse, offline, logEntries, c
                   </motion.div>
                 )}
               </div>
+
+              {calibExplica && !offline && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.15 }}
+                  className="mb-4 text-xs leading-relaxed text-[#c9a8dd] bg-[#8f5da6]/[0.07] ring-1 ring-[#8f5da6]/20 rounded-lg p-3"
+                >
+                  {calibExplica}
+                </motion.p>
+              )}
 
               <blockquote className={`text-sm leading-relaxed border-l-2 pl-4 ${offline ? 'italic text-[#b8791f] border-[#b8791f]/40' : 'text-white/70 border-white/10'}`}>
                 {offline ? tr('decision.offline.body', offline.etiqueta, offline.calc.diasCriticos) : lastResponse?.justificacion}

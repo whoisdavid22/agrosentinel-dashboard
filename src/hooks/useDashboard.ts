@@ -10,7 +10,7 @@ import {
   SHARED_SHARE_URL,
 } from '../lib/constants';
 import { calcularFAO56Local, computePredictions, type Predictions } from '../lib/faoCalc';
-import type { CurrentData, DecisionResponse, LogEntry, FetchErrorInfo, ImageZone, Calibracion, AsignacionRed, TelegramVinculo } from '../lib/types';
+import type { CurrentData, DecisionResponse, LogEntry, FetchErrorInfo, ImageZone, Calibracion, AsignacionRed, RedComparativa, TelegramVinculo } from '../lib/types';
 import type { User } from '@supabase/supabase-js';
 import { t, type Lang } from '../lib/translations';
 
@@ -109,12 +109,15 @@ export function useDashboard() {
 
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
+  const chatMessagesRef = useRef<ChatMsg[]>([]);
+  chatMessagesRef.current = chatMessages;
 
   const [historial, setHistorial] = useState<HistorialRow[] | null>(null);
   const [historialStatus, setHistorialStatus] = useState('');
 
   const [calibracion, setCalibracion] = useState<Calibracion | null>(null);
   const [asignacionRed, setAsignacionRed] = useState<AsignacionRed | null>(null);
+  const [comparativaRed, setComparativaRed] = useState<RedComparativa | null>(null);
   const [redCuenca, setRedCuenca] = useState('');
   const [redShareStatus, setRedShareStatus] = useState('');
 
@@ -298,6 +301,26 @@ export function useDashboard() {
     cargarAsignacionRed();
   }, [cargarAsignacionRed]);
 
+  // ---- Comparación con parcelas vecinas de la misma cuenca (vía RPC SECURITY DEFINER) ----
+  const cargarComparativaRed = useCallback(async () => {
+    if (!user) {
+      setComparativaRed(null);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.rpc('red_comparativa');
+      if (error) throw error;
+      const fila = Array.isArray(data) ? (data[0] as RedComparativa | undefined) : (data as RedComparativa | null);
+      setComparativaRed(fila && fila.parcelas_vecinas > 0 ? fila : null);
+    } catch {
+      setComparativaRed(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    cargarComparativaRed();
+  }, [cargarComparativaRed]);
+
   const compartirConRed = useCallback(
     async (cuenca: string) => {
       if (!user) {
@@ -338,11 +361,12 @@ export function useDashboard() {
         if (!res.ok) throw new Error(String(res.status));
         setRedShareStatus(t(lang, 'red.shared'));
         cargarAsignacionRed();
+        cargarComparativaRed();
       } catch {
         setRedShareStatus(t(lang, 'red.shareFailed'));
       }
     },
-    [user, lang, offline, lastResponse, cargarAsignacionRed],
+    [user, lang, offline, lastResponse, cargarAsignacionRed, cargarComparativaRed],
   );
 
   // ---- Vinculación de Telegram: liga el chat_id del bot a este usuario ----
@@ -554,6 +578,15 @@ export function useDashboard() {
   const sendCopilotMessage = useCallback(
     async (text: string) => {
       if (!text.trim()) return;
+      // Memoria conversacional: se antepone el historial reciente a la pregunta
+      // (el nodo de n8n sólo lee `body.pregunta`, así que la memoria viaja ahí).
+      const previos = chatMessagesRef.current.slice(-6);
+      const preguntaConMemoria =
+        previos.length > 0
+          ? `[Conversación previa en esta sesión, para que mantengas el contexto]\n` +
+            previos.map((m) => `${m.who === 'user' ? 'Usuario' : 'Copiloto'}: ${m.text}`).join('\n') +
+            `\n\n[Pregunta actual del usuario]\n${text}`
+          : text;
       setChatMessages((m) => [...m, { who: 'user', text }]);
       setChatLoading(true);
       try {
@@ -561,7 +594,8 @@ export function useDashboard() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            pregunta: text,
+            pregunta: preguntaConMemoria,
+            historial: previos.map((m) => ({ role: m.who === 'user' ? 'user' : 'assistant', content: m.text })),
             contexto: {
               ndvi: currentDataRef.current.ndvi,
               temperatura_c: currentDataRef.current.temperatura_c,
@@ -698,6 +732,7 @@ export function useDashboard() {
     calibracion,
     asignacionRed,
     cargarAsignacionRed,
+    comparativaRed,
     compartirConRed,
     redCuenca,
     setRedCuenca,

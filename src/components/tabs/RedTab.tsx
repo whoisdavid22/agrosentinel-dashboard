@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { makeT, type Lang } from '../../lib/translations';
-import type { AsignacionRed } from '../../lib/types';
+import type { AsignacionRed, RedComparativa } from '../../lib/types';
 
 interface RedTabProps {
   lang: Lang;
   asignacionRed: AsignacionRed | null;
+  comparativaRed: RedComparativa | null;
   cargarAsignacionRed: () => void;
   compartirConRed: (cuenca: string) => void;
   redCuenca: string;
@@ -16,6 +17,7 @@ interface RedTabProps {
 export default function RedTab({
   lang,
   asignacionRed,
+  comparativaRed,
   cargarAsignacionRed,
   compartirConRed,
   redCuenca,
@@ -24,6 +26,16 @@ export default function RedTab({
 }: RedTabProps) {
   const tr = makeT(lang);
   const [share, setShare] = useState(false);
+
+  const comparaTexto = (() => {
+    if (!comparativaRed || comparativaRed.apertura_propia == null || comparativaRed.apertura_promedio_vecinos == null) return null;
+    const diff = Math.round(comparativaRed.apertura_propia - comparativaRed.apertura_promedio_vecinos);
+    const n = comparativaRed.parcelas_vecinas;
+    const avg = Math.round(comparativaRed.apertura_promedio_vecinos);
+    if (diff >= 3) return tr('red.compare.more', diff, n, avg);
+    if (diff <= -3) return tr('red.compare.less', -diff, n, avg);
+    return tr('red.compare.same', n, avg);
+  })();
 
   return (
     <div className="flex flex-col gap-5">
@@ -92,6 +104,18 @@ export default function RedTab({
             </div>
           </div>
           {asignacionRed.motivo_asignacion && <p className="text-xs text-white/50 leading-relaxed">{asignacionRed.motivo_asignacion}</p>}
+        </motion.div>
+      )}
+
+      {comparaTexto && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-[#2d6e8f]/10 ring-1 ring-[#2d6e8f]/20 p-5">
+          <h3 className="text-sm font-medium text-white mb-2">{tr('red.compare.title')}</h3>
+          <p className="text-xs text-white/70 leading-relaxed">{comparaTexto}</p>
+          {comparativaRed?.humedad_propia != null && comparativaRed?.humedad_promedio_vecinos != null && (
+            <p className="text-xs text-white/45 leading-relaxed mt-2">
+              {tr('red.compare.humidity', Math.round(comparativaRed.humedad_propia), Math.round(comparativaRed.humedad_promedio_vecinos))}
+            </p>
+          )}
         </motion.div>
       )}
     </div>

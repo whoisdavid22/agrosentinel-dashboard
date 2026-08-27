@@ -96,6 +96,15 @@ export interface AsignacionRed {
   created_at: string;
 }
 
+export interface RedComparativa {
+  cuenca: string;
+  parcelas_vecinas: number;
+  apertura_promedio_vecinos: number | null;
+  humedad_promedio_vecinos: number | null;
+  apertura_propia: number | null;
+  humedad_propia: number | null;
+}
+
 export interface TelegramVinculo {
   chat_id: number;
   vinculado_at: string;

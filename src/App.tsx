@@ -126,6 +126,7 @@ export default function App() {
                   <RedTab
                     lang={d.lang}
                     asignacionRed={d.asignacionRed}
+                    comparativaRed={d.comparativaRed}
                     cargarAsignacionRed={d.cargarAsignacionRed}
                     compartirConRed={d.compartirConRed}
                     redCuenca={d.redCuenca}

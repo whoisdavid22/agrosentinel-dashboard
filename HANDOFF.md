@@ -1,26 +1,91 @@
-# AgroSentinel — Handoff (25 agosto 2026)
+# AgroSentinel — Handoff (27 agosto 2026)
 
 Documento para retomar el trabajo en una sesión nueva de Claude Code. Pégale
 esto a Claude al abrir: *"Lee HANDOFF.md en la carpeta Dashboard y sigamos
 donde quedamos."*
 
-## 🔴 EN PROGRESO AHORA MISMO (25 agosto, sesión cortada por límite de contexto)
+## 🟢 ESTADO ACTUAL (27 agosto 2026)
 
-Se está construyendo la **vinculación de cuentas de Telegram** (cada usuario
+**La vinculación de cuentas de Telegram quedó COMPLETA y en producción**
+(probada end-to-end con curl y publicada — ver sección **"✅ Vinculación de
+Telegram (COMPLETA — 26 agosto)"** más abajo).
+
+**En progreso ahora:** 5 innovaciones extra pedidas el 27 agosto (digest +
+4 más). Ver **"🔨 Innovaciones extra (27 agosto)"** justo abajo para el
+estado de cada una y los pasos que faltan del lado del usuario.
+
+## 🔨 Innovaciones extra (27 agosto)
+
+### ⚠️ Acciones pendientes DEL USUARIO (sin esto, 3 de 5 no funcionan)
+
+1. **SQL** — correr `Dashboard/sql/red_comparativa.sql` en el SQL Editor de
+   Supabase (crea la función `red_comparativa()` para la comparación entre
+   vecinos — innovación C).
+2. **n8n** — abrir el workflow **"Digest diario Telegram"**
+   (`78pkJom6NbuapLc7`) en el editor y togglear **Active** off→on (el cron
+   se cambió a `0 7 * * *` por API y n8n Cloud no re-registra el schedule
+   sin el toggle — ver `n8n_debugging_patterns` #19).
+3. **n8n** — abrir el workflow **"Aviso reasignacion Telegram"**
+   (`KyHDfJi24Ff1eXZZ`, creado hoy por API, está `inactive`) y togglear
+   **Active** on (innovación D).
+4. **Deploy** — `npm run build` en `Dashboard/` + copiar `dist/` al repo
+   `whoisdavid22.github.io` carpeta `agrosentinel/`, commit y push (para
+   publicar A, C y E — ver "Cómo redeploy" arriba). Build ya pasa limpio.
+
+### A — Explicación del Kc calibrado en lenguaje natural ✅ (código listo)
+
+Debajo del badge morado de auto-calibración en la pestaña **Decisión**
+ahora aparece una frase que explica *por qué* el agente ajustó el Kc
+(ej. "…riega un 8% más porque en las últimas 4 lecturas el suelo se secó
+más rápido de lo que la fórmula predecía…"). Es **determinística**
+(client-side, sin llamada extra a Claude, sin latencia) — se calcula de
+`kc_ajuste`/`muestras`. Archivos: `translations.ts`
+(`decision.calibration.explica.*`), `DecisionTab.tsx` (`calibExplica`).
+Falta sólo el deploy.
+
+### B — Memoria conversacional en el copiloto ✅ (código listo, sin tocar n8n)
+
+`sendCopilotMessage` en `useDashboard.ts` ahora antepone las últimas 6
+tandas de la conversación a `body.pregunta` (el nodo de n8n
+`Asistente AgroSentinel` sólo lee ese campo, así que la memoria viaja
+ahí — cero cambios en n8n). También manda un `body.historial` con formato
+`{role,content}[]` listo para cuando se quiera migrar el nodo a
+`messages[]` de verdad. Falta sólo el deploy.
+
+### C — Comparación entre parcelas de la misma cuenca ✅ (código listo, necesita SQL)
+
+Nueva tarjeta en la pestaña **Red de Parcelas**: "Comparado con tu
+cuenca" — "tu parcela pide un X% {más/menos} de apertura que el promedio
+de las N parcelas vecinas". RLS de `RedParcelas` sólo deja ver filas
+propias, así que se hace vía la función `red_comparativa()` SECURITY
+DEFINER (RPC) — **hay que correr el SQL** (acción #1 arriba). Degrada
+suave: si la función no existe o no hay vecinos, la tarjeta simplemente
+no aparece. Archivos: `sql/red_comparativa.sql`, `types.ts`
+(`RedComparativa`), `useDashboard.ts` (`cargarComparativaRed`,
+`comparativaRed`), `RedTab.tsx`, `App.tsx`, `translations.ts`
+(`red.compare.*`).
+
+### D — Alerta por Telegram cuando se reasigna agua ✅ (workflow creado, falta activar)
+
+Workflow **nuevo** "Aviso reasignacion Telegram" (`KyHDfJi24Ff1eXZZ`),
+Schedule Trigger `7,37 * * * *` (unos minutos después de que corre
+`Optimizar asignacion` a `:00`/`:30`). Lee `RedParcelas` de las últimas
+24 h, se queda con la fila más reciente por usuario, y avisa por Telegram
+sólo si: (a) es de hace <35 min, (b) `asignado != deseado`, y (c) cambió
+respecto a la fila anterior de ese usuario (evita spam cada 30 min).
+Busca el `chat_id` en `TelegramVinculos`. Se hizo como workflow separado
+en vez de tocar `Optimizar asignacion` porque el clasificador de permisos
+bloqueó el PUT sobre el workflow de producción. Falta togglear Active
+(acción #3).
+
+### E — Digest diario proactivo ✅ (ver sección siguiente, ya verificado)
+
+### Historial: vinculación de Telegram (resuelto)
+
+Se construyó la **vinculación de cuentas de Telegram** (cada usuario
 del dashboard vincula su propio chat_id, en vez de que todos compartan la
-parcela demo) + comandos `/estado`, `/ayuda`, `/vincular`, `/reportar`. Ver
-sección completa **"🔨 Vinculación de Telegram (EN CONSTRUCCIÓN)"** más abajo
-— tiene el diseño completo, qué está hecho, y el plan nodo-por-nodo exacto
-para terminar. **Leer esa sección antes que nada más si el pedido es seguir
-con esto.**
-
-Estado en una línea: dashboard (React) terminado y commiteado; SQL de
-Supabase entregado al usuario, **confirmar si ya lo corrió**; workflow de
-n8n `Telegram Agrosentinel` a la mitad — el borrador (draft) tiene nodos
-nuevos sin terminar de conectar, pero **la versión publicada/activa sigue
-siendo la de antes, intacta y funcionando en producción** (no se tocó
-Publish desde que se empezó esta feature), así que el bot real no se rompió
-mientras se construye.
+parcela demo) + comandos `/estado`, `/ayuda`, `/vincular`, `/reportar`.
+Terminada y publicada el 26 agosto.
 
 ## Dónde vive cada cosa
 
@@ -497,13 +562,136 @@ Lectura` → duplicado temporal reconfigurado como `DELETE
 confirmado `204 No Content` — y luego borrado del workflow). No quedó
 ningún nodo extra en producción.
 
-## 🔨 Vinculación de Telegram (EN CONSTRUCCIÓN — pedido 25 agosto, tarde)
+## ✅ Vinculación de Telegram (COMPLETA — 26 agosto)
 
-**Por qué:** hasta ahora, cualquiera que le escriba al bot lee/escribe
-sobre la misma parcela demo (`user_id` hardcodeado). El usuario pidió que
-cada quien vincule su propio chat_id con su cuenta real del dashboard, más
-comandos (`/estado`, `/ayuda`, `/vincular`, y poder reportar con
-`/reportar <texto>` además del mensaje libre de siempre).
+**Terminada, probada end-to-end en producción y publicada.** Resumen de lo
+que quedó:
+
+- Workflow `Telegram Agrosentinel` (id `Z4qV9UkL5ooIi2v6`) **publicado**
+  con la cadena completa `/vincular`, `/estado`, `/ayuda`, `/reportar` y
+  mensaje libre — todos con `user_id` dinámico
+  (`$('Detectar comando').first().json.user_id`), ya no hardcodeado a la
+  cuenta demo.
+- 8 casos de prueba corridos contra el webhook real (`curl`), todos
+  pasando, incluida entrega real a Telegram e insert real en `Lecturas`.
+- Dashboard con la pestaña "Telegram" **deployado** en
+  `https://whoisdavid22.github.io/agrosentinel/` (build + push hechos).
+  Repo fuente `agrosentinel-dashboard` pusheado a GitHub (master al día).
+- **Bug arreglado:** el nodo `Buscar vinculo` tenía los headers rotos
+  (nunca se había pegado la `service_role` key real) — se arregló
+  duplicando un `HTTP Request` que ya la tenía y reconfigurándolo.
+- **Bug de n8n nuevo (ver `n8n_debugging_patterns` #18):** en el campo URL
+  (modo "Fixed") de un nodo HTTP Request, `Ctrl+A` NO selecciona el
+  contenido del campo — el shortcut global de n8n "seleccionar todos los
+  nodos del canvas" se come el evento, así que `Ctrl+A` + escribir
+  INSERTA texto en vez de reemplazar y corrompe la URL. Fix confiable:
+  abrir el editor expandido de la URL, click al inicio del texto,
+  `shift+click` al final para seleccionar con mouse, recién ahí escribir.
+- ✅ El usuario ya mandó `/setcommands` a `@BotFather` para
+  `@AgroSentinelbot` (confirmado 27 agosto, todos los comandos sirven).
+  El texto usado:
+  ```
+  estado - Ver el estado actual de tu parcela
+  reportar - Reportar una lectura nueva (o solo escribí en lenguaje natural)
+  vincular - Vincular este chat con tu cuenta del dashboard
+  ayuda - Cómo usar el bot
+  ```
+
+### Datos de prueba reutilizables
+
+- `chat_id = 8997988050` (David) tiene un vínculo real en
+  `TelegramVinculos` con `user_id = 65002887-a20e-40e1-8689-7f86c00372ba`,
+  y ese `user_id` sí tiene lecturas reales en `Lecturas`.
+
+---
+
+## 🔨 Digest diario proactivo — innovación E (27 agosto, verificado)
+
+**Por qué:** cierra el loop de "agente autónomo que actúa en el mundo
+real" de la Innovación 5, pero de forma **proactiva y programada** en vez
+de solo reactiva a mensajes. Todos los días a una hora fija, cada usuario
+vinculado recibe por Telegram un resumen corto de su parcela sin pedirlo.
+
+**Enfoque:** workflow **nuevo** ("Digest diario Telegram"), sin webhook →
+se puede construir ENTERO vía la API pública de n8n
+(`POST`/`PUT /api/v1/workflows`). La restricción del PUT con nodos webhook
+(#12) NO aplica porque usa Schedule Trigger.
+
+### Diseño nodo por nodo
+
+1. **Schedule Trigger** — cron `0 7 * * *` (n8n lo evalúa en la timezone
+   de la instancia = Costa Rica, no UTC).
+2. **Obtener vinculos** (HTTP GET, headers `apikey`/`Authorization` con la
+   `service_role` key de Supabase, extraída vía
+   `GET /api/v1/workflows/Z4qV9UkL5ooIi2v6`) →
+   `.../TelegramVinculos?select=chat_id,user_id`
+3. **Preparar lista** (Code) — normaliza array/objeto a items n8n:
+   ```js
+   const filas = $input.first().json;
+   const arr = Array.isArray(filas) ? filas : (filas && Object.keys(filas).length ? [filas] : []);
+   return arr.map(f => ({ json: { chat_id: f.chat_id, user_id: f.user_id } }));
+   ```
+4. **Obtener lectura** (HTTP GET, misma key, Always Output Data ON) →
+   `.../Lecturas?user_id=eq.{{ $json.user_id }}&order=created_at.desc&limit=1`
+   — corre una vez por item.
+5. **Procesar lectura** (Code) — patrón defensivo array/objeto, agrega
+   `chat_id` vía `$('Preparar lista')`, produce
+   `{ tieneLectura, chat_id, ...datos }`.
+6. **If tiene lectura** (If, Boolean "is true" sobre `{{ !!$json.tieneLectura }}`
+   — elegir Boolean a mano, ver #11).
+   - TRUE → **Formatear mensaje** (Code: texto con `humedad_suelo_pct`,
+     `dias_sin_lluvia`, `valvula`, `nivel_alerta`, `accion`) →
+     `{ json: { body: JSON.stringify({ chat_id, text }) } }` →
+     **Enviar Telegram** (HTTP POST, token de bot
+     `8614520613:AAHzrW7b7LwIdnSd0hbesoWRn748B5UwNMo`,
+     `api.telegram.org/bot<token>/sendMessage`, body `{{ $json.body }}`).
+   - FALSE → sin conectar.
+
+### Cómo probar sin esperar al cron
+
+n8n público no tiene endpoint REST para ejecutar un Schedule workflow bajo
+demanda. Opción: agregar temporalmente un Webhook en paralelo (conectado
+al mismo primer nodo real), probar con curl, verificar vía
+`GET /api/v1/executions/:id?includeData=true`, y BORRAR el Webhook antes
+de activar la versión final (Schedule Trigger como único disparador). El
+nodo Webhook hay que agregarlo/quitarlo por la UI (aplica #12) — o
+activar el workflow recién al final cuando ya no tenga webhook y hacer
+todo lo demás por API.
+
+Chat de prueba: `chat_id = 8997988050`,
+`user_id = 65002887-a20e-40e1-8689-7f86c00372ba` (tiene lecturas reales).
+
+### Estado (27 agosto)
+
+- [x] API key de n8n (scope All) — la pasó el usuario.
+- [x] `service_role` key + token de bot extraídos vía
+      `GET /api/v1/workflows/Z4qV9UkL5ooIi2v6`.
+- [x] Workflow **creado vía API**: id `78pkJom6NbuapLc7`, nombre
+      "Digest diario Telegram", 8 nodos, `active:true`.
+- [x] Lógica probada end-to-end a mano con curl (replicando cada nodo):
+      mensaje real entregado al chat `8997988050` (message_id 35).
+- [x] **Verificado dentro de n8n**: tras togglear Active off→on en la UI
+      (necesario — la API sola no registra el schedule, ver
+      `n8n_debugging_patterns` #19), "Test workflow" corrió los 8 nodos OK
+      (ejecución 542, `success`) y el resumen llegó al Telegram de David.
+      El Schedule Trigger reporta timezone `America/Costa_Rica (UTC-06:00)`.
+- [x] **Cron corregido a `0 7 * * *`** — n8n evalúa el cron en la timezone
+      de la instancia (Costa Rica), NO en UTC, así que `0 7 * * *` =
+      7:00 a.m. hora local. (El `0 13 * * *` inicial habría sido la 1 p.m.)
+- [ ] Como el cron se cambió por PUT después del último toggle, **volver a
+      togglear Active off→on en la UI una vez más** para que el scheduler
+      tome el `0 7`. Confirmar con la primera ejecución automática mañana
+      7 a.m. (o cron cercano + toggle para probar ya).
+
+---
+
+## 📁 Vinculación de Telegram — diseño original (referencia)
+
+**Por qué:** hasta la vinculación, cualquiera que le escriba al bot
+lee/escribe sobre la misma parcela demo (`user_id` hardcodeado). El
+usuario pidió que cada quien vincule su propio chat_id con su cuenta real
+del dashboard, más comandos (`/estado`, `/ayuda`, `/vincular`, y poder
+reportar con `/reportar <texto>` además del mensaje libre de siempre).
 
 **Diseño acordado con el usuario** (eligió explícitamente la opción
 "completa" cuando se le preguntó): desde el dashboard, el usuario logueado
@@ -643,7 +831,7 @@ reportar, consultar, todo usa su `user_id` real en vez del hardcodeado.
      `[1456,48]`) — **acá quedó cortada la sesión, condición vacía sin
      configurar.**
 
-### 🔧 Falta por hacer (plan exacto, nodo por nodo)
+### 🔧 Plan de construcción (YA EJECUTADO — se deja como referencia del grafo final)
 
 1. **Terminar el 5º If** (el que quedó sin nombre): condición
    `{{ $('Detectar comando').first().json.ruta }}` is equal to `ayuda`.
@@ -756,13 +944,27 @@ están completas y verificadas: auto-calibración, red de agua compartida,
 ventana de riego con pronóstico, anomalía de sensor + tool-calling
 autónomo, y alerta/consulta/reporte por Telegram — incluyendo el fix del
 25 agosto de la lectura real por Telegram. `Red Stats` también arreglado
-y la base de datos limpia. La vinculación de cuentas de Telegram (arriba)
-es trabajo nuevo pedido esta misma tarde, no estaba en el alcance
-original de la presentación — evaluar si vale la pena terminarla antes
-del 28 o si el bot actual (con la parcela demo compartida) ya alcanza
-para la demo.
+y la base de datos limpia. La vinculación de cuentas de Telegram quedó
+**completa y publicada el 26 agosto**. El **Digest diario proactivo** es
+la innovación nueva en construcción (27 agosto) — ver su sección arriba.
 
 ## Pendiente / ideas futuras
+
+Otras ideas de innovación (por si sobra tiempo después del digest), en
+orden de recomendación:
+
+1. **Explicación del Kc calibrado en lenguaje natural** — pedirle a Claude
+   una frase corta explicando el % de ajuste, en vez de solo mostrar el
+   número, en el badge morado de auto-calibración.
+2. **Memoria conversacional en el copiloto de chat**
+   (`Asistente AgroSentinel`, webhook `copiloto-agrosentinel`) — que
+   recuerde el contexto de calibración/red/pronóstico de la parcela en
+   vez de arrancar en blanco cada vez.
+3. **Comparación entre parcelas de la misma red** ("tu vecino con el mismo
+   cultivo usa 15% menos agua") — el dato ya existe en `RedParcelas`,
+   solo falta exponerlo.
+4. **Alerta por Telegram cuando `Optimizar asignacion` reasigna agua**
+   proactivamente (hoy ese workflow corre solo, sin avisar).
 
 Si sobra tiempo: considerar una tercera tool para el triage (ej.
 `consultar_calibracion_historica`, descartada por ser una lectura

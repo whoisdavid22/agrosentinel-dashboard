@@ -91,6 +91,12 @@ const dict = {
     'decision.calibration.baja': 'confianza baja',
     'decision.calibration.media': 'confianza media',
     'decision.calibration.alta': 'confianza alta',
+    'decision.calibration.explica.more': (pct: number, muestras: number) =>
+      `El agente ya no usa la tabla estándar FAO-56 tal cual: para esta parcela riega un ${pct}% más, porque en las últimas ${muestras} lecturas el suelo se secó más rápido de lo que la fórmula predecía. Ajustó su propio coeficiente de cultivo (Kc) para compensar.`,
+    'decision.calibration.explica.less': (pct: number, muestras: number) =>
+      `El agente ya no usa la tabla estándar FAO-56 tal cual: para esta parcela riega un ${pct}% menos, porque en las últimas ${muestras} lecturas el suelo retuvo humedad mejor de lo que la fórmula predecía. Bajó su propio coeficiente de cultivo (Kc) para no regar de más.`,
+    'decision.calibration.explica.none': (muestras: number) =>
+      `El agente comparó sus predicciones con lo que realmente pasó en las últimas ${muestras} lecturas y confirmó que la tabla estándar FAO-56 describe bien esta parcela: mantiene el coeficiente de cultivo (Kc) sin ajuste.`,
 
     // Valve3D
     'valve3d.hint': 'Arrastra para rotar la cámara — se reanuda la rotación automática después de un momento.',
@@ -199,6 +205,15 @@ const dict = {
     'red.requested': 'Solicitado',
     'red.assigned': 'Asignado por la red',
     'red.refresh': 'Actualizar',
+    'red.compare.title': 'Comparado con tu cuenca',
+    'red.compare.more': (pct: number, n: number, avg: number) =>
+      `Tu parcela pide un ${pct}% más de apertura de válvula que el promedio de las ${n} parcela${n !== 1 ? 's' : ''} vecinas de tu cuenca (${avg}%). Estás tomando más del recurso compartido que tu vecindario.`,
+    'red.compare.less': (pct: number, n: number, avg: number) =>
+      `Tu parcela pide un ${pct}% menos de apertura de válvula que el promedio de las ${n} parcela${n !== 1 ? 's' : ''} vecinas de tu cuenca (${avg}%). Estás siendo más eficiente con el agua compartida que tu vecindario.`,
+    'red.compare.same': (n: number, avg: number) =>
+      `Tu parcela pide prácticamente lo mismo que el promedio de tu cuenca (${avg}%, ${n} parcela${n !== 1 ? 's' : ''} vecinas).`,
+    'red.compare.humidity': (mine: number, theirs: number) =>
+      `Humedad de suelo — tu parcela: ${mine}% · promedio de la cuenca: ${theirs}%.`,
 
     // Vinculación de Telegram
     'telegram.intro': 'Vinculá tu cuenta con el bot de Telegram para poder reportar lecturas nuevas y consultar el estado de tu parcela por chat, con tus propios datos.',
@@ -353,6 +368,12 @@ const dict = {
     'decision.calibration.baja': 'low confidence',
     'decision.calibration.media': 'medium confidence',
     'decision.calibration.alta': 'high confidence',
+    'decision.calibration.explica.more': (pct: number, muestras: number) =>
+      `The agent no longer uses the standard FAO-56 table as-is: for this plot it irrigates ${pct}% more, because over the last ${muestras} readings the soil dried out faster than the formula predicted. It adjusted its own crop coefficient (Kc) to compensate.`,
+    'decision.calibration.explica.less': (pct: number, muestras: number) =>
+      `The agent no longer uses the standard FAO-56 table as-is: for this plot it irrigates ${pct}% less, because over the last ${muestras} readings the soil held moisture better than the formula predicted. It lowered its own crop coefficient (Kc) to avoid over-irrigating.`,
+    'decision.calibration.explica.none': (muestras: number) =>
+      `The agent compared its predictions against what actually happened over the last ${muestras} readings and confirmed the standard FAO-56 table describes this plot well: it keeps the crop coefficient (Kc) unadjusted.`,
 
     'valve3d.hint': 'Drag to rotate the camera — auto-rotation resumes after a moment.',
     'valve3d.flow': 'Flow',
@@ -453,6 +474,15 @@ const dict = {
     'red.requested': 'Requested',
     'red.assigned': 'Assigned by the network',
     'red.refresh': 'Refresh',
+    'red.compare.title': 'Compared with your watershed',
+    'red.compare.more': (pct: number, n: number, avg: number) =>
+      `Your plot is asking for ${pct}% more valve opening than the average of the ${n} neighboring plot${n !== 1 ? 's' : ''} in your watershed (${avg}%). You are drawing more of the shared resource than your neighborhood.`,
+    'red.compare.less': (pct: number, n: number, avg: number) =>
+      `Your plot is asking for ${pct}% less valve opening than the average of the ${n} neighboring plot${n !== 1 ? 's' : ''} in your watershed (${avg}%). You are being more efficient with the shared water than your neighborhood.`,
+    'red.compare.same': (n: number, avg: number) =>
+      `Your plot is asking for essentially the same as your watershed average (${avg}%, ${n} neighboring plot${n !== 1 ? 's' : ''}).`,
+    'red.compare.humidity': (mine: number, theirs: number) =>
+      `Soil moisture — your plot: ${mine}% · watershed average: ${theirs}%.`,
 
     // Telegram account linking
     'telegram.intro': 'Link your account with the Telegram bot to report new readings and check your parcel status by chat, using your own data.',
