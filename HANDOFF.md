@@ -127,12 +127,21 @@ workflow corrió los 15 nodos hasta `Guardar equidad` y se encontraron
 - Ventana de "parcelas activas" ampliada de 40 a 90 min (más margen
   para la demo; se puede bajar a 30-60 en producción).
 
-**Acciones pendientes del usuario para F:**
-1. Correr `sql/negociacion_cuenca.sql` en Supabase. ✅ (hecho)
-2. **BORRAR** el workflow `Negociacion cuenca` viejo (`H1Zl88Vnkq6HYUyV`,
-   tiene los 2 bugs) e **importar el JSON corregido** que te pasó Claude
-   (con secretos reales) → activarlo.
-3. Desactivar `Optimizar asignacion`. ✅ (hecho)
+**✅ F VERIFICADO END-TO-END (28 ago 02:05 UTC).** Workflow corregido
+importado (`85k0KE5qRFrqdHB5`, ON; el viejo `H1Zl88Vnkq6HYUyV` en off).
+Corrida real con 2 cuentas en `tanque-norte`: los 20 nodos ejecutaron,
+el mediador devolvió acuerdo + transcripción + reparto completos,
+`EquidadCuenca` se escribió sin error, `RedParcelas` quedó en 71/71%,
+y el actuador se llamó. El dashboard (pestaña Red de Parcelas) muestra
+ACUERDO + REPARTO FINAL + transcripción desplegable + crédito de equidad.
+
+Nota para la demo: las 2 parcelas de prueba quedaron idénticas → reparto
+simétrico 71/71. Para un contraste fuerte en la charla, hacer que una
+cuenta reporte SEVERO/humedad baja y la otra LEVE/con margen antes de
+compartir — así el mediador reparte asimétrico (tipo 90 vs 40).
+
+Acciones ya hechas: SQL corrido, `Optimizar asignacion` desactivado,
+workflow corregido importado y verificado.
 4. (opcional) Configurar un actuador de prueba en la pestaña Red de
    Parcelas para demostrar la actuación física; si no, queda en modo
    manual y se explica en la charla.
