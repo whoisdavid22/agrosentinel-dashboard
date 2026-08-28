@@ -23,7 +23,7 @@
   },
   {
    "parameters": {
-    "url": "=https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/RedParcelas?select=id,user_id,cuenca,humedad_suelo_pct,ndvi,nivel_alerta,dias_sin_intervencion,porcentaje_apertura_deseado,created_at&created_at=gte.{{ new Date(Date.now() - 40*60*1000).toISOString() }}&order=created_at.desc",
+    "url": "=https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/RedParcelas?select=id,user_id,cuenca,humedad_suelo_pct,ndvi,nivel_alerta,dias_sin_intervencion,porcentaje_apertura_deseado,created_at&created_at=gte.{{ new Date(Date.now() - 90*60*1000).toISOString() }}&order=created_at.desc",
     "sendHeaders": true,
     "headerParameters": {
      "parameters": [
@@ -217,7 +217,7 @@
   {
    "parameters": {
     "mode": "runOnceForAllItems",
-    "jsCode": "\nreturn $input.all().map(i => {\n  const j = i.json;\n  const sys = \"Sos el agente autonomo de UNA parcela agricola que comparte el agua de una cuenca con otras parcelas. Conseguí la mayor cantidad de agua que tu cultivo realmente necesita, siendo honesto sobre tu urgencia y justo con el resto (hay memoria de equidad entre dias). Respondé SOLO JSON, sin texto extra.\";\n  const prompt = 'Estado de TU parcela (privado):\\n'\n    + '- humedad de suelo: ' + j.humedad_suelo_pct + '%\\n'\n    + '- dias sin intervencion: ' + j.dias_sin_intervencion + '\\n'\n    + '- nivel de alerta: ' + j.nivel_alerta + '\\n'\n    + '- NDVI: ' + j.ndvi + '\\n'\n    + '- apertura de valvula que pediste: ' + j.deseado_pct + '% (' + j.deseado_lmin + ' L/min)\\n'\n    + '- tu credito de equidad: ' + j.credito + ' (positivo = cediste antes, se te debe prioridad; negativo = recibiste de mas, te toca ceder)\\n\\n'\n    + 'La cuenca \"' + j.cuenca + '\" tiene capacidad ' + j.capacidad_lmin + ' L/min y la demanda total de las ' + j.n_parcelas + ' parcelas es ' + j.demanda_total_lmin + ' L/min: NO alcanza para todos.\\n'\n    + 'Resumen publico de las otras parcelas: ' + JSON.stringify(j.otros) + '\\n\\n'\n    + 'Devolvé JSON: { \"urgencia\": number 0..1, \"cedo_pct\": number 0..100, \"pido_minimo_pct\": number, \"mensaje\": \"1-2 frases dirigidas a las otras parcelas\" }';\n  const body = { model: \"claude-sonnet-4-6\", max_tokens: 350, system: sys, messages: [{ role: \"user\", content: prompt }] };\n  return { json: { ...j, body: JSON.stringify(body) } };\n});\n"
+    "jsCode": "\nreturn $input.all().map(i => {\n  const j = i.json;\n  const sys = \"Sos el agente autonomo de UNA parcela agricola que comparte el agua de una cuenca con otras parcelas. Conseguí la mayor cantidad de agua que tu cultivo realmente necesita, siendo honesto sobre tu urgencia y justo con el resto (hay memoria de equidad entre dias). Respondé SOLO JSON, sin texto extra.\";\n  const prompt = 'Estado de TU parcela (privado):\\n'\n    + '- humedad de suelo: ' + j.humedad_suelo_pct + '%\\n'\n    + '- dias sin intervencion: ' + j.dias_sin_intervencion + '\\n'\n    + '- nivel de alerta: ' + j.nivel_alerta + '\\n'\n    + '- NDVI: ' + j.ndvi + '\\n'\n    + '- apertura de valvula que pediste: ' + j.deseado_pct + '% (' + j.deseado_lmin + ' L/min)\\n'\n    + '- tu credito de equidad: ' + j.credito + ' (positivo = cediste antes, se te debe prioridad; negativo = recibiste de mas, te toca ceder)\\n\\n'\n    + 'La cuenca \"' + j.cuenca + '\" tiene capacidad ' + j.capacidad_lmin + ' L/min y la demanda total de las ' + j.n_parcelas + ' parcelas es ' + j.demanda_total_lmin + ' L/min: NO alcanza para todos.\\n'\n    + 'Resumen publico de las otras parcelas: ' + JSON.stringify(j.otros) + '\\n\\n'\n    + 'Respondé UNICAMENTE este JSON, sin fences ni texto extra: { \"urgencia\": <numero 0..1>, \"cedo_pct\": <numero 0..100>, \"pido_minimo_pct\": <numero>, \"mensaje\": \"1-2 frases dirigidas a las otras parcelas\" }';\n  const body = { model: \"claude-sonnet-4-6\", max_tokens: 500, system: sys, messages: [{ role: \"user\", content: prompt }] };\n  return { json: { ...j, body: JSON.stringify(body) } };\n});\n"
    },
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -266,7 +266,7 @@
   {
    "parameters": {
     "mode": "runOnceForAllItems",
-    "jsCode": "\nconst resp = $input.all();\nconst ctx = $('Prompt bid').all().map(i => i.json);\nconst porCuenca = {};\nfor (let k = 0; k < resp.length; k++) {\n  const j = ctx[k];\n  let bid;\n  try { const t = resp[k].json.content[0].text; bid = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); }\n  catch (e) { bid = { urgencia: 0.5, cedo_pct: 0, pido_minimo_pct: j.deseado_pct, mensaje: '(sin respuesta del agente)' }; }\n  const c = porCuenca[j.cuenca] = porCuenca[j.cuenca] || { cuenca: j.cuenca, capacidad_lmin: j.capacidad_lmin, demanda_total_lmin: j.demanda_total_lmin, agentes: [] };\n  c.agentes.push({ user_id: j.user_id, id: j.id, deseado_pct: j.deseado_pct, deseado_lmin: j.deseado_lmin, credito: j.credito, nivel_alerta: j.nivel_alerta, dias_sin_intervencion: j.dias_sin_intervencion, bid });\n}\nreturn Object.values(porCuenca).map(c => {\n  const sys = \"Sos el mediador imparcial de una cuenca de agua compartida entre parcelas agricolas. Produci un reparto que (a) no supere la capacidad, (b) priorice la urgencia real, (c) respete la memoria de equidad (quien cedio antes tiene prioridad ahora), (d) le de a cada parcela al menos su minimo cuando sea fisicamente posible. Respondé SOLO JSON.\";\n  const prompt = 'Cuenca \"' + c.cuenca + '\". Capacidad: ' + c.capacidad_lmin + ' L/min. Demanda total pedida: ' + c.demanda_total_lmin + ' L/min.\\n'\n    + 'Caudal maximo por valvula: 4.2 L/min (apertura 100% = 4.2 L/min).\\n\\n'\n    + 'Posiciones de los agentes:\\n'\n    + c.agentes.map(a => '- Parcela ' + a.user_id + ': pidio ' + a.deseado_pct + '%, alerta ' + a.nivel_alerta + ', ' + a.dias_sin_intervencion + ' dias sin intervencion, credito equidad ' + a.credito + '. Dice: urgencia ' + a.bid.urgencia + ', cede hasta ' + a.bid.cedo_pct + '%, minimo ' + a.bid.pido_minimo_pct + '%. \"' + a.bid.mensaje + '\"').join('\\n')\n    + '\\n\\nDevolvé JSON:\\n{\\n  \"acuerdo\": \"2-4 frases en espanol explicando el reparto final y por que, para los agricultores\",\\n  \"reparto\": [ { \"user_id\": \"<uuid completo tal cual te lo di>\", \"asignado_pct\": number 0..100, \"credito_delta\": number, \"justificacion\": \"1 frase\" } ],\\n  \"transcripcion\": [ { \"agente\": \"<uuid o mediador>\", \"ronda\": number, \"mensaje\": \"...\" } ]\\n}\\nLa suma de asignado_pct*4.2/100 NO puede superar ' + c.capacidad_lmin + '.';\n  const body = { model: \"claude-sonnet-4-6\", max_tokens: 1100, system: sys, messages: [{ role: \"user\", content: prompt }] };\n  return { json: { cuenca: c.cuenca, capacidad_lmin: c.capacidad_lmin, demanda_total_lmin: c.demanda_total_lmin, agentes: c.agentes, body: JSON.stringify(body) } };\n});\n"
+    "jsCode": "\nconst resp = $input.all();\nconst ctx = $('Prompt bid').all().map(i => i.json);\nconst porCuenca = {};\nfor (let k = 0; k < resp.length; k++) {\n  const j = ctx[k];\n  let bid;\n  try { let t = (resp[k].json.content[0].text || '').replace(/```json/gi, '').replace(/```/g, '').trim(); bid = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); }\n  catch (e) { bid = { urgencia: 0.5, cedo_pct: 0, pido_minimo_pct: j.deseado_pct, mensaje: '(sin respuesta del agente)' }; }\n  const c = porCuenca[j.cuenca] = porCuenca[j.cuenca] || { cuenca: j.cuenca, capacidad_lmin: j.capacidad_lmin, demanda_total_lmin: j.demanda_total_lmin, agentes: [] };\n  c.agentes.push({ user_id: j.user_id, id: j.id, deseado_pct: j.deseado_pct, deseado_lmin: j.deseado_lmin, credito: j.credito, nivel_alerta: j.nivel_alerta, dias_sin_intervencion: j.dias_sin_intervencion, bid });\n}\nreturn Object.values(porCuenca).map(c => {\n  const sys = \"Sos el mediador imparcial de una cuenca de agua compartida entre parcelas agricolas. Produci un reparto que (a) no supere la capacidad, (b) priorice la urgencia real, (c) respete la memoria de equidad (quien cedio antes tiene prioridad ahora), (d) le de a cada parcela al menos su minimo cuando sea fisicamente posible. Respondé SOLO JSON.\";\n  const prompt = 'Cuenca \"' + c.cuenca + '\". Capacidad: ' + c.capacidad_lmin + ' L/min. Demanda total pedida: ' + c.demanda_total_lmin + ' L/min.\\n'\n    + 'Caudal maximo por valvula: 4.2 L/min (apertura 100% = 4.2 L/min).\\n\\n'\n    + 'Posiciones de los agentes:\\n'\n    + c.agentes.map(a => '- Parcela ' + a.user_id + ': pidio ' + a.deseado_pct + '%, alerta ' + a.nivel_alerta + ', ' + a.dias_sin_intervencion + ' dias sin intervencion, credito equidad ' + a.credito + '. Dice: urgencia ' + a.bid.urgencia + ', cede hasta ' + a.bid.cedo_pct + '%, minimo ' + a.bid.pido_minimo_pct + '%. \"' + a.bid.mensaje + '\"').join('\\n')\n    + '\\n\\nRespondé UNICAMENTE con este JSON (sin fences, sin texto antes o despues), y SE BREVE para no cortarte:\\n{\\n  \"acuerdo\": \"maximo 2 frases cortas\",\\n  \"reparto\": [ { \"user_id\": \"<uuid completo tal cual te lo di>\", \"asignado_pct\": <entero 0..100>, \"credito_delta\": <numero>, \"justificacion\": \"media frase\" } ],\\n  \"transcripcion\": [ { \"agente\": \"<uuid corto o mediador>\", \"ronda\": 1, \"mensaje\": \"una frase\" } ]\\n}\\nLa suma de asignado_pct*4.2/100 NO puede superar ' + c.capacidad_lmin + '. Incluí un objeto en \"reparto\" por cada parcela.';\n  const body = { model: \"claude-sonnet-4-6\", max_tokens: 2500, system: sys, messages: [{ role: \"user\", content: prompt }] };\n  return { json: { cuenca: c.cuenca, capacidad_lmin: c.capacidad_lmin, demanda_total_lmin: c.demanda_total_lmin, agentes: c.agentes, body: JSON.stringify(body) } };\n});\n"
    },
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -315,7 +315,7 @@
   {
    "parameters": {
     "mode": "runOnceForAllItems",
-    "jsCode": "\nconst resp = $input.all();\nconst ctx = $('Parsear bids').all().map(i => i.json);\nconst CAUDAL = 4.2;\nconst filas = [];\nconst negos = [];\nfor (let k = 0; k < resp.length; k++) {\n  const c = ctx[k];\n  const agentes = c.agentes;\n  let out = null;\n  try { const t = resp[k].json.content[0].text; out = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); } catch (e) { out = null; }\n  let reparto = (out && Array.isArray(out.reparto)) ? out.reparto : [];\n  if (reparto.length !== agentes.length) {\n    const pesos = agentes.map(a => Math.max(0.01, (a.bid && a.bid.urgencia != null ? a.bid.urgencia : 0.5) + Math.max(0, a.credito) * 0.05));\n    const sw = pesos.reduce((s, x) => s + x, 0);\n    reparto = agentes.map((a, i) => ({ user_id: a.user_id, asignado_pct: Math.min(a.deseado_pct, Math.round((pesos[i] / sw) * c.capacidad_lmin / CAUDAL * 100)), credito_delta: 0, justificacion: 'Reparto proporcional a urgencia (mediador sin respuesta valida).' }));\n  }\n  for (const a of agentes) {\n    const r = reparto.find(x => x.user_id === a.user_id) || {};\n    const asignado = Math.max(0, Math.min(100, Math.round(Number(r.asignado_pct != null ? r.asignado_pct : a.deseado_pct))));\n    const delta = Number(r.credito_delta != null ? r.credito_delta : 0);\n    filas.push({ id: a.id, user_id: a.user_id, cuenca: c.cuenca, deseado_pct: a.deseado_pct, asignado_pct: asignado, credito_nuevo: Math.round((a.credito + delta) * 100) / 100, motivo: ('Negociacion de cuenca: ' + (r.justificacion || (out && out.acuerdo) || 'reparto acordado')).slice(0, 400) });\n  }\n  negos.push({\n    cuenca: c.cuenca, capacidad_lmin: c.capacidad_lmin, demanda_total_lmin: c.demanda_total_lmin,\n    acuerdo: (out && out.acuerdo) || 'Reparto calculado por fallback proporcional (sin mediador).',\n    transcripcion: (out && out.transcripcion) || agentes.map(a => ({ agente: String(a.user_id).slice(0, 8), ronda: 1, mensaje: (a.bid && a.bid.mensaje) || '' })),\n    resultado: agentes.map(a => { const f = filas.find(x => x.user_id === a.user_id && x.cuenca === c.cuenca); const r = reparto.find(x => x.user_id === a.user_id) || {}; return { user_id: a.user_id, deseado_pct: a.deseado_pct, asignado_pct: f ? f.asignado_pct : a.deseado_pct, credito: f ? f.credito_nuevo : a.credito, justificacion: r.justificacion || '' }; }),\n  });\n}\nreturn filas.map(f => ({ json: { ...f, _negos: negos } }));\n"
+    "jsCode": "\nconst resp = $input.all();\nconst ctx = $('Parsear bids').all().map(i => i.json);\nconst CAUDAL = 4.2;\nconst filas = [];\nconst negos = [];\nfor (let k = 0; k < resp.length; k++) {\n  const c = ctx[k];\n  const agentes = c.agentes;\n  let out = null;\n  try { let t = (resp[k].json.content[0].text || '').replace(/```json/gi, '').replace(/```/g, '').trim(); out = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); } catch (e) { out = null; }\n  let reparto = (out && Array.isArray(out.reparto)) ? out.reparto : [];\n  if (reparto.length !== agentes.length) {\n    const pesos = agentes.map(a => Math.max(0.01, (a.bid && a.bid.urgencia != null ? a.bid.urgencia : 0.5) + Math.max(0, a.credito) * 0.05));\n    const sw = pesos.reduce((s, x) => s + x, 0);\n    reparto = agentes.map((a, i) => ({ user_id: a.user_id, asignado_pct: Math.min(a.deseado_pct, Math.round((pesos[i] / sw) * c.capacidad_lmin / CAUDAL * 100)), credito_delta: 0, justificacion: 'Reparto proporcional a urgencia (mediador sin respuesta valida).' }));\n  }\n  for (const a of agentes) {\n    const r = reparto.find(x => x.user_id === a.user_id) || {};\n    const asignado = Math.max(0, Math.min(100, Math.round(Number(r.asignado_pct != null ? r.asignado_pct : a.deseado_pct))));\n    const delta = Number(r.credito_delta != null ? r.credito_delta : 0);\n    filas.push({ id: a.id, user_id: a.user_id, cuenca: c.cuenca, deseado_pct: a.deseado_pct, asignado_pct: asignado, credito_nuevo: Math.round((a.credito + delta) * 100) / 100, motivo: ('Negociacion de cuenca: ' + (r.justificacion || (out && out.acuerdo) || 'reparto acordado')).slice(0, 400) });\n  }\n  negos.push({\n    cuenca: c.cuenca, capacidad_lmin: c.capacidad_lmin, demanda_total_lmin: c.demanda_total_lmin,\n    acuerdo: (out && out.acuerdo) || 'Reparto calculado por fallback proporcional (sin mediador).',\n    transcripcion: (out && out.transcripcion) || agentes.map(a => ({ agente: String(a.user_id).slice(0, 8), ronda: 1, mensaje: (a.bid && a.bid.mensaje) || '' })),\n    resultado: agentes.map(a => { const f = filas.find(x => x.user_id === a.user_id && x.cuenca === c.cuenca); const r = reparto.find(x => x.user_id === a.user_id) || {}; return { user_id: a.user_id, deseado_pct: a.deseado_pct, asignado_pct: f ? f.asignado_pct : a.deseado_pct, credito: f ? f.credito_nuevo : a.credito, justificacion: r.justificacion || '' }; }),\n  });\n}\nreturn filas.map(f => ({ json: { ...f, _negos: negos } }));\n"
    },
    "type": "n8n-nodes-base.code",
    "typeVersion": 2,
@@ -657,13 +657,7 @@
       "node": "Guardar sin conflicto",
       "type": "main",
       "index": 0
-     }
-    ]
-   ]
-  },
-  "Guardar sin conflicto": {
-   "main": [
-    [
+     },
      {
       "node": "Marcar actuador",
       "type": "main",
@@ -725,27 +719,15 @@
       "index": 0
      },
      {
-      "node": "Expandir negociaciones",
-      "type": "main",
-      "index": 0
-     }
-    ]
-   ]
-  },
-  "Guardar RedParcelas": {
-   "main": [
-    [
-     {
       "node": "Guardar equidad",
       "type": "main",
       "index": 0
-     }
-    ]
-   ]
-  },
-  "Guardar equidad": {
-   "main": [
-    [
+     },
+     {
+      "node": "Expandir negociaciones",
+      "type": "main",
+      "index": 0
+     },
      {
       "node": "Marcar actuador",
       "type": "main",

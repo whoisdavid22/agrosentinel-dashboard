@@ -207,11 +207,11 @@ const dict = {
     'red.refresh': 'Actualizar',
     'red.compare.title': 'Comparado con tu cuenca',
     'red.compare.more': (pct: number, n: number, avg: number) =>
-      `Tu parcela pide un ${pct}% más de apertura de válvula que el promedio de las ${n} parcela${n !== 1 ? 's' : ''} vecinas de tu cuenca (${avg}%). Estás tomando más del recurso compartido que tu vecindario.`,
+      `Tu parcela pide un ${pct}% más de apertura de válvula que el promedio de las ${n} parcela${n !== 1 ? 's' : ''} vecina${n !== 1 ? 's' : ''} de tu cuenca (${avg}%). Estás tomando más del recurso compartido que tu vecindario.`,
     'red.compare.less': (pct: number, n: number, avg: number) =>
-      `Tu parcela pide un ${pct}% menos de apertura de válvula que el promedio de las ${n} parcela${n !== 1 ? 's' : ''} vecinas de tu cuenca (${avg}%). Estás siendo más eficiente con el agua compartida que tu vecindario.`,
+      `Tu parcela pide un ${pct}% menos de apertura de válvula que el promedio de las ${n} parcela${n !== 1 ? 's' : ''} vecina${n !== 1 ? 's' : ''} de tu cuenca (${avg}%). Estás siendo más eficiente con el agua compartida que tu vecindario.`,
     'red.compare.same': (n: number, avg: number) =>
-      `Tu parcela pide prácticamente lo mismo que el promedio de tu cuenca (${avg}%, ${n} parcela${n !== 1 ? 's' : ''} vecinas).`,
+      `Tu parcela pide prácticamente lo mismo que el promedio de tu cuenca (${avg}%, ${n} parcela${n !== 1 ? 's' : ''} vecina${n !== 1 ? 's' : ''}).`,
     'red.compare.humidity': (mine: number, theirs: number) =>
       `Humedad de suelo — tu parcela: ${mine}% · promedio de la cuenca: ${theirs}%.`,
 

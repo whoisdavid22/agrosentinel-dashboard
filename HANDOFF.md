@@ -113,11 +113,26 @@ transcripción + reparto).
   "Negociación de la cuenca" y "Actuador físico"), `App.tsx`,
   `translations.ts` (`nego.*`, `actuador.*`).
 
+**Verificación 28 ago (madrugada):** se probó end-to-end con 2 cuentas
+compartiendo lectura en `tanque-norte` (demanda 6.3 > 6 L/min). El
+workflow corrió los 15 nodos hasta `Guardar equidad` y se encontraron
+2 bugs, **ya corregidos en el JSON `n8n/Negociacion-cuenca.json`**:
+- El `Mediador` se cortaba por `max_tokens: 1100` → JSON truncado → caía
+  al fallback proporcional. Subido a 2500 + prompt más conciso +
+  strip de fences ```` ```json ````.
+- `Guardar equidad` recibía `user_id` null porque leía `$json` después
+  de `Guardar RedParcelas` (bug #9). Se reconectó para que `Guardar
+  RedParcelas`, `Guardar equidad`, `Expandir negociaciones` y `Marcar
+  actuador` cuelguen todos en paralelo de `Aplicar acuerdo`.
+- Ventana de "parcelas activas" ampliada de 40 a 90 min (más margen
+  para la demo; se puede bajar a 30-60 en producción).
+
 **Acciones pendientes del usuario para F:**
-1. Correr `sql/negociacion_cuenca.sql` en Supabase.
-2. Importar `Negociacion cuenca` a n8n (JSON con secretos reales que te
-   pasó Claude) y activarlo.
-3. Desactivar `Optimizar asignacion`.
+1. Correr `sql/negociacion_cuenca.sql` en Supabase. ✅ (hecho)
+2. **BORRAR** el workflow `Negociacion cuenca` viejo (`H1Zl88Vnkq6HYUyV`,
+   tiene los 2 bugs) e **importar el JSON corregido** que te pasó Claude
+   (con secretos reales) → activarlo.
+3. Desactivar `Optimizar asignacion`. ✅ (hecho)
 4. (opcional) Configurar un actuador de prueba en la pestaña Red de
    Parcelas para demostrar la actuación física; si no, queda en modo
    manual y se explica en la charla.
