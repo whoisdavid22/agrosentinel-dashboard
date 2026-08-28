@@ -80,6 +80,48 @@ bloqueó el PUT sobre el workflow de producción. Falta togglear Active
 
 ### E — Digest diario proactivo ✅ (ver sección siguiente, ya verificado)
 
+### F — Negociación peer-to-peer de la cuenca + actuador físico opcional
+
+**El cambio de paradigma:** `Optimizar asignacion` repartía el agua de
+forma central (un script mira todo y baja una orden). Ahora **cada parcela
+tiene su propio agente** (una llamada a Claude con solo los datos privados
+de esa parcela + un resumen público de las otras). Los agentes hacen una
+ronda de posiciones (`urgencia`, `cedo_pct`, `pido_minimo_pct`, mensaje) y
+un **mediador imparcial** (otra llamada a Claude) cierra el reparto
+respetando capacidad, urgencia real y una **memoria de equidad entre días**
+(`EquidadCuenca.credito`: quien cedió agua antes tiene prioridad después).
+Todo queda auditable en `NegociacionCuenca` (acuerdo en lenguaje natural +
+transcripción + reparto).
+
+- **Workflow n8n:** `n8n/Negociacion-cuenca.json` (22 nodos, Schedule
+  `5,35 * * * *`). **NO se pudo crear por API** (el clasificador de
+  permisos de Claude Code bloqueó el POST — modifica infra compartida +
+  llamadas salientes). Hay que **importarlo a mano** — ver `n8n/README.md`.
+  Reemplaza a `Optimizar asignacion` (hay que desactivar ese).
+- **Actuador físico opcional:** tabla `ParcelaConfig` (RLS propia). En la
+  pestaña Red de Parcelas hay una tarjeta "Actuador físico (opcional)" con
+  un toggle "Tengo un actuador conectado" + URL + token. Si está activo,
+  después de cada análisis el dashboard hace `POST` a esa URL con
+  `{ source, valve_pct, motivo }` y muestra "Válvula ajustada
+  automáticamente al X%". **Sin actuador, todo funciona igual** (queda la
+  recomendación manual). El workflow de negociación también llama al
+  actuador de cada parcela al cerrar el reparto.
+- **Dashboard:** `sql/negociacion_cuenca.sql` (tablas `NegociacionCuenca`,
+  `EquidadCuenca`, `ParcelaConfig` + RPC `negociacion_cuenca_ultima()`),
+  `types.ts`, `useDashboard.ts` (`cargarNegociacion`, `parcelaConfig`,
+  `guardarParcelaConfig`, `ejecutarActuador`), `RedTab.tsx` (secciones
+  "Negociación de la cuenca" y "Actuador físico"), `App.tsx`,
+  `translations.ts` (`nego.*`, `actuador.*`).
+
+**Acciones pendientes del usuario para F:**
+1. Correr `sql/negociacion_cuenca.sql` en Supabase.
+2. Importar `Negociacion cuenca` a n8n (JSON con secretos reales que te
+   pasó Claude) y activarlo.
+3. Desactivar `Optimizar asignacion`.
+4. (opcional) Configurar un actuador de prueba en la pestaña Red de
+   Parcelas para demostrar la actuación física; si no, queda en modo
+   manual y se explica en la charla.
+
 ### Historial: vinculación de Telegram (resuelto)
 
 Se construyó la **vinculación de cuentas de Telegram** (cada usuario

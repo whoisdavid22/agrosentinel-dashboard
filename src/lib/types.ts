@@ -96,6 +96,37 @@ export interface AsignacionRed {
   created_at: string;
 }
 
+export interface NegociacionResultado {
+  user_id: string;
+  deseado_pct: number;
+  asignado_pct: number;
+  credito: number;
+  justificacion: string;
+}
+
+export interface NegociacionTurno {
+  agente: string;
+  ronda: number;
+  mensaje: string;
+}
+
+export interface NegociacionCuenca {
+  cuenca: string;
+  ronda_at: string;
+  capacidad_lmin: number | null;
+  demanda_total_lmin: number | null;
+  acuerdo: string | null;
+  transcripcion: NegociacionTurno[] | null;
+  resultado: NegociacionResultado[] | null;
+  mi_credito: number;
+}
+
+export interface ParcelaConfig {
+  tiene_actuador: boolean;
+  actuador_url: string;
+  actuador_token: string;
+}
+
 export interface RedComparativa {
   cuenca: string;
   parcelas_vecinas: number;

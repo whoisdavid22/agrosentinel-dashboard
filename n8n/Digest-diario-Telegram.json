@@ -1,0 +1,262 @@
+{
+ "name": "Digest diario Telegram",
+ "nodes": [
+  {
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "cronExpression",
+       "expression": "0 13 * * *"
+      }
+     ]
+    }
+   },
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1.2,
+   "position": [
+    0,
+    300
+   ],
+   "id": "Schedule-Trigger",
+   "name": "Schedule Trigger"
+  },
+  {
+   "parameters": {
+    "url": "https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/TelegramVinculos?select=chat_id,user_id",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    220,
+    300
+   ],
+   "id": "Obtener-vinculos",
+   "name": "Obtener vinculos"
+  },
+  {
+   "parameters": {
+    "jsCode": "const filas = $input.first().json;\nconst arr = Array.isArray(filas) ? filas : (filas && Object.keys(filas).length ? [filas] : []);\nreturn arr.map(f => ({ json: { chat_id: f.chat_id, user_id: f.user_id } }));"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    440,
+    300
+   ],
+   "id": "Preparar-lista",
+   "name": "Preparar lista"
+  },
+  {
+   "parameters": {
+    "url": "=https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/Lecturas?user_id=eq.{{ $json.user_id }}&order=created_at.desc&limit=1",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    660,
+    300
+   ],
+   "id": "Obtener-lectura",
+   "name": "Obtener lectura",
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "jsCode": "const filas = $input.first().json;\nlet fila;\nif (Array.isArray(filas)) { fila = filas[0] || null; }\nelse { fila = filas && Object.keys(filas).length ? filas : null; }\nconst chat_id = $('Preparar lista').item.json.chat_id;\nreturn [{ json: {\n  tieneLectura: !!fila,\n  chat_id,\n  humedad_suelo_pct: fila ? fila.humedad_suelo_pct : null,\n  dias_sin_lluvia: fila ? fila.dias_sin_lluvia : null,\n  valvula: fila ? fila.valvula : null,\n  nivel_alerta: fila ? fila.nivel_alerta : null,\n  accion: fila ? fila.accion : null,\n} }];"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    880,
+    300
+   ],
+   "id": "Procesar-lectura",
+   "name": "Procesar lectura"
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict",
+      "version": 3
+     },
+     "conditions": [
+      {
+       "id": "cond-tiene-lectura",
+       "leftValue": "={{ !!$json.tieneLectura }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.3,
+   "position": [
+    1100,
+    300
+   ],
+   "id": "If-tiene-lectura",
+   "name": "If tiene lectura"
+  },
+  {
+   "parameters": {
+    "jsCode": "const d = $input.first().json;\nconst text = '\\uD83C\\uDF31 Resumen diario de tu parcela\\n\\n'\n  + '\\uD83D\\uDCA7 Humedad de suelo: ' + d.humedad_suelo_pct + '%\\n'\n  + '\\u2600\\uFE0F Dias sin lluvia: ' + d.dias_sin_lluvia + '\\n'\n  + '\\uD83D\\uDEB0 Valvula: ' + d.valvula + '\\n'\n  + '\\u26A0\\uFE0F Alerta: ' + d.nivel_alerta + '\\n\\n'\n  + '\\uD83D\\uDCCB Accion recomendada:\\n' + d.accion + '\\n\\n'\n  + 'Generado automaticamente a las 7:00 a.m.';\nreturn [{ json: { body: JSON.stringify({ chat_id: d.chat_id, text }) } }];"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1320,
+    200
+   ],
+   "id": "Formatear-mensaje",
+   "name": "Formatear mensaje"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ $json.body }}",
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    1540,
+    200
+   ],
+   "id": "Enviar-Telegram",
+   "name": "Enviar Telegram"
+  }
+ ],
+ "connections": {
+  "Schedule Trigger": {
+   "main": [
+    [
+     {
+      "node": "Obtener vinculos",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Obtener vinculos": {
+   "main": [
+    [
+     {
+      "node": "Preparar lista",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Preparar lista": {
+   "main": [
+    [
+     {
+      "node": "Obtener lectura",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Obtener lectura": {
+   "main": [
+    [
+     {
+      "node": "Procesar lectura",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Procesar lectura": {
+   "main": [
+    [
+     {
+      "node": "If tiene lectura",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "If tiene lectura": {
+   "main": [
+    [
+     {
+      "node": "Formatear mensaje",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    []
+   ]
+  },
+  "Formatear mensaje": {
+   "main": [
+    [
+     {
+      "node": "Enviar Telegram",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1"
+ }
+}

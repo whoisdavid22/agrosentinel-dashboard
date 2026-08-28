@@ -1,0 +1,195 @@
+{
+ "name": "Aviso reasignacion Telegram",
+ "nodes": [
+  {
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "cronExpression",
+       "expression": "7,37 * * * *"
+      }
+     ]
+    }
+   },
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1.2,
+   "position": [
+    0,
+    300
+   ],
+   "id": "Schedule-Trigger",
+   "name": "Schedule Trigger"
+  },
+  {
+   "parameters": {
+    "url": "=https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/RedParcelas?select=user_id,porcentaje_apertura_deseado,porcentaje_apertura_asignado,motivo_asignacion,humedad_suelo_pct,created_at&created_at=gte.{{ new Date(Date.now() - 24*3600*1000).toISOString() }}&order=created_at.desc",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    220,
+    300
+   ],
+   "id": "Leer-RedParcelas",
+   "name": "Leer RedParcelas",
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const raw = $input.first().json;\nconst rows = Array.isArray(raw) ? raw : (raw && Object.keys(raw).length ? [raw] : []);\nconst porUser = {};\nfor (const r of rows) { (porUser[r.user_id] = porUser[r.user_id] || []).push(r); }\nconst AHORA = Date.now();\nconst out = [];\nfor (const uid of Object.keys(porUser)) {\n  const hist = porUser[uid].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));\n  const cur = hist[0], prev = hist[1];\n  if (!cur || cur.porcentaje_apertura_asignado == null) continue;\n  const reciente = (AHORA - new Date(cur.created_at).getTime()) < 35*60*1000;\n  const esReasignacion = cur.porcentaje_apertura_asignado !== cur.porcentaje_apertura_deseado;\n  const cambio = !prev || prev.porcentaje_apertura_asignado !== cur.porcentaje_apertura_asignado;\n  if (reciente && esReasignacion && cambio) out.push({ json: cur });\n}\nreturn out;"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    440,
+    300
+   ],
+   "id": "Filtrar-reasignados",
+   "name": "Filtrar reasignados"
+  },
+  {
+   "parameters": {
+    "url": "=https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/TelegramVinculos?user_id=eq.{{ $json.user_id }}&select=chat_id",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    660,
+    300
+   ],
+   "id": "Buscar-chat",
+   "name": "Buscar chat",
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "const chats = $input.all();\nconst reasig = $('Filtrar reasignados').all().map(i => i.json);\nconst out = [];\nfor (let k = 0; k < chats.length; k++) {\n  const prev = chats[k].json;\n  const fila = Array.isArray(prev) ? prev[0] : (prev && Object.keys(prev).length ? prev : null);\n  if (!fila || !fila.chat_id) continue;\n  const r = reasig[k];\n  const subiendo = r.porcentaje_apertura_asignado > r.porcentaje_apertura_deseado;\n  const text = '\\uD83D\\uDCA7 Reasignacion de agua en tu cuenca\\n\\n'\n    + 'El agente ' + (subiendo ? 'subio' : 'ajusto') + ' la apertura de tu valvula de '\n    + r.porcentaje_apertura_deseado + '% a ' + r.porcentaje_apertura_asignado + '%.\\n\\n'\n    + (r.motivo_asignacion || '');\n  out.push({ json: { body: JSON.stringify({ chat_id: fila.chat_id, text }) } });\n}\nreturn out;"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    880,
+    300
+   ],
+   "id": "Preparar-aviso",
+   "name": "Preparar aviso"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://api.telegram.org/bot__TELEGRAM_BOT_TOKEN__/sendMessage",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ $json.body }}",
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    1100,
+    300
+   ],
+   "id": "Enviar-Telegram",
+   "name": "Enviar Telegram"
+  }
+ ],
+ "connections": {
+  "Schedule Trigger": {
+   "main": [
+    [
+     {
+      "node": "Leer RedParcelas",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Leer RedParcelas": {
+   "main": [
+    [
+     {
+      "node": "Filtrar reasignados",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Filtrar reasignados": {
+   "main": [
+    [
+     {
+      "node": "Buscar chat",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Buscar chat": {
+   "main": [
+    [
+     {
+      "node": "Preparar aviso",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Preparar aviso": {
+   "main": [
+    [
+     {
+      "node": "Enviar Telegram",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1"
+ }
+}

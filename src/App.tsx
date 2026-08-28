@@ -125,8 +125,14 @@ export default function App() {
                 {tab === 'red' && (
                   <RedTab
                     lang={d.lang}
+                    userId={d.user.id}
                     asignacionRed={d.asignacionRed}
                     comparativaRed={d.comparativaRed}
+                    negociacion={d.negociacion}
+                    cargarNegociacion={d.cargarNegociacion}
+                    parcelaConfig={d.parcelaConfig}
+                    guardarParcelaConfig={d.guardarParcelaConfig}
+                    actuadorStatus={d.actuadorStatus}
                     cargarAsignacionRed={d.cargarAsignacionRed}
                     compartirConRed={d.compartirConRed}
                     redCuenca={d.redCuenca}

@@ -1,0 +1,817 @@
+{
+ "name": "Negociacion cuenca",
+ "nodes": [
+  {
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "cronExpression",
+       "expression": "5,35 * * * *"
+      }
+     ]
+    }
+   },
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1.2,
+   "position": [
+    0,
+    300
+   ],
+   "id": "Schedule-Trigger",
+   "name": "Schedule Trigger"
+  },
+  {
+   "parameters": {
+    "url": "=https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/RedParcelas?select=id,user_id,cuenca,humedad_suelo_pct,ndvi,nivel_alerta,dias_sin_intervencion,porcentaje_apertura_deseado,created_at&created_at=gte.{{ new Date(Date.now() - 40*60*1000).toISOString() }}&order=created_at.desc",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    220,
+    300
+   ],
+   "id": "Leer-parcelas",
+   "name": "Leer parcelas",
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "url": "https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/Cuencas?select=nombre,capacidad_maxima_lmin",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    440,
+    300
+   ],
+   "id": "Leer-cuencas",
+   "name": "Leer cuencas",
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "url": "https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/EquidadCuenca?select=user_id,cuenca,credito",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    660,
+    300
+   ],
+   "id": "Leer-equidad",
+   "name": "Leer equidad",
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "\nconst grab = n => { const items = $(n).all().map(i => i.json); const flat = []; for (const x of items) { if (Array.isArray(x)) flat.push(...x); else if (x && Object.keys(x).length) flat.push(x); } return flat; };\nconst rows = grab('Leer parcelas');\nconst cuencas = grab('Leer cuencas');\nconst equidad = grab('Leer equidad');\nconst CAUDAL = 4.2;\nconst latest = {};\nfor (const r of rows) { if (!r || !r.id) continue; if (!latest[r.user_id] || new Date(r.created_at) > new Date(latest[r.user_id].created_at)) latest[r.user_id] = r; }\nconst activas = Object.values(latest);\nconst capOf = n => { const c = cuencas.find(x => x.nombre === n); return c ? Number(c.capacidad_maxima_lmin) : null; };\nconst credOf = (uid, cu) => { const e = equidad.find(x => x.user_id === uid && x.cuenca === cu); return e ? Number(e.credito) : 0; };\nconst grupos = {};\nfor (const p of activas) { if (!p.cuenca) continue; (grupos[p.cuenca] = grupos[p.cuenca] || []).push(p); }\nconst out = [];\nfor (const cu of Object.keys(grupos)) {\n  const ps = grupos[cu];\n  const cap = capOf(cu);\n  const dem = ps.map(p => ({ p, lmin: (Number(p.porcentaje_apertura_deseado) / 100) * CAUDAL }));\n  const demTotal = dem.reduce((s, d) => s + d.lmin, 0);\n  const hayConflicto = cap != null && ps.length > 1 && demTotal > cap + 1e-6;\n  for (const { p, lmin } of dem) {\n    out.push({ json: {\n      necesita_negociacion: hayConflicto,\n      id: p.id, user_id: p.user_id, cuenca: cu,\n      capacidad_lmin: cap,\n      demanda_total_lmin: Math.round(demTotal * 100) / 100,\n      n_parcelas: ps.length,\n      deseado_pct: Number(p.porcentaje_apertura_deseado),\n      deseado_lmin: Math.round(lmin * 100) / 100,\n      humedad_suelo_pct: p.humedad_suelo_pct,\n      dias_sin_intervencion: p.dias_sin_intervencion,\n      nivel_alerta: p.nivel_alerta,\n      ndvi: p.ndvi,\n      credito: credOf(p.user_id, cu),\n      otros: ps.filter(o => o.user_id !== p.user_id).map(o => ({ alerta: o.nivel_alerta, dias_sin_intervencion: o.dias_sin_intervencion, pide_pct: Number(o.porcentaje_apertura_deseado) })),\n    } });\n  }\n}\nreturn out;\n"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    880,
+    300
+   ],
+   "id": "Preparar-plan",
+   "name": "Preparar plan"
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict",
+      "version": 3
+     },
+     "conditions": [
+      {
+       "id": "c-nego",
+       "leftValue": "={{ !!$json.necesita_negociacion }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.3,
+   "position": [
+    1100,
+    300
+   ],
+   "id": "If-necesita-negociacion",
+   "name": "If necesita negociacion"
+  },
+  {
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "\nreturn $input.all().map(i => { const j = i.json; return { json: {\n  id: j.id, user_id: j.user_id, cuenca: j.cuenca,\n  deseado_pct: j.deseado_pct, asignado_pct: j.deseado_pct,\n  credito_nuevo: j.credito,\n  motivo: 'Sin escasez en ' + j.cuenca + ': recibe el 100% de lo solicitado (' + j.deseado_pct + '%).',\n} }; });\n"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1320,
+    480
+   ],
+   "id": "Sin-conflicto",
+   "name": "Sin conflicto"
+  },
+  {
+   "parameters": {
+    "method": "PATCH",
+    "url": "=https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/RedParcelas?id=eq.{{ $json.id }}",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ porcentaje_apertura_asignado: $json.asignado_pct, motivo_asignacion: $json.motivo }) }}",
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    1540,
+    480
+   ],
+   "id": "Guardar-sin-conflicto",
+   "name": "Guardar sin conflicto"
+  },
+  {
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "\nreturn $input.all().map(i => {\n  const j = i.json;\n  const sys = \"Sos el agente autonomo de UNA parcela agricola que comparte el agua de una cuenca con otras parcelas. Conseguí la mayor cantidad de agua que tu cultivo realmente necesita, siendo honesto sobre tu urgencia y justo con el resto (hay memoria de equidad entre dias). Respondé SOLO JSON, sin texto extra.\";\n  const prompt = 'Estado de TU parcela (privado):\\n'\n    + '- humedad de suelo: ' + j.humedad_suelo_pct + '%\\n'\n    + '- dias sin intervencion: ' + j.dias_sin_intervencion + '\\n'\n    + '- nivel de alerta: ' + j.nivel_alerta + '\\n'\n    + '- NDVI: ' + j.ndvi + '\\n'\n    + '- apertura de valvula que pediste: ' + j.deseado_pct + '% (' + j.deseado_lmin + ' L/min)\\n'\n    + '- tu credito de equidad: ' + j.credito + ' (positivo = cediste antes, se te debe prioridad; negativo = recibiste de mas, te toca ceder)\\n\\n'\n    + 'La cuenca \"' + j.cuenca + '\" tiene capacidad ' + j.capacidad_lmin + ' L/min y la demanda total de las ' + j.n_parcelas + ' parcelas es ' + j.demanda_total_lmin + ' L/min: NO alcanza para todos.\\n'\n    + 'Resumen publico de las otras parcelas: ' + JSON.stringify(j.otros) + '\\n\\n'\n    + 'Devolvé JSON: { \"urgencia\": number 0..1, \"cedo_pct\": number 0..100, \"pido_minimo_pct\": number, \"mensaje\": \"1-2 frases dirigidas a las otras parcelas\" }';\n  const body = { model: \"claude-sonnet-4-6\", max_tokens: 350, system: sys, messages: [{ role: \"user\", content: prompt }] };\n  return { json: { ...j, body: JSON.stringify(body) } };\n});\n"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1760,
+    120
+   ],
+   "id": "Prompt-bid",
+   "name": "Prompt bid"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://api.anthropic.com/v1/messages",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "x-api-key",
+       "value": "__ANTHROPIC_API_KEY__"
+      },
+      {
+       "name": "anthropic-version",
+       "value": "2023-06-01"
+      },
+      {
+       "name": "content-type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ $json.body }}",
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    1980,
+    120
+   ],
+   "id": "Bid-agente",
+   "name": "Bid agente"
+  },
+  {
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "\nconst resp = $input.all();\nconst ctx = $('Prompt bid').all().map(i => i.json);\nconst porCuenca = {};\nfor (let k = 0; k < resp.length; k++) {\n  const j = ctx[k];\n  let bid;\n  try { const t = resp[k].json.content[0].text; bid = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); }\n  catch (e) { bid = { urgencia: 0.5, cedo_pct: 0, pido_minimo_pct: j.deseado_pct, mensaje: '(sin respuesta del agente)' }; }\n  const c = porCuenca[j.cuenca] = porCuenca[j.cuenca] || { cuenca: j.cuenca, capacidad_lmin: j.capacidad_lmin, demanda_total_lmin: j.demanda_total_lmin, agentes: [] };\n  c.agentes.push({ user_id: j.user_id, id: j.id, deseado_pct: j.deseado_pct, deseado_lmin: j.deseado_lmin, credito: j.credito, nivel_alerta: j.nivel_alerta, dias_sin_intervencion: j.dias_sin_intervencion, bid });\n}\nreturn Object.values(porCuenca).map(c => {\n  const sys = \"Sos el mediador imparcial de una cuenca de agua compartida entre parcelas agricolas. Produci un reparto que (a) no supere la capacidad, (b) priorice la urgencia real, (c) respete la memoria de equidad (quien cedio antes tiene prioridad ahora), (d) le de a cada parcela al menos su minimo cuando sea fisicamente posible. Respondé SOLO JSON.\";\n  const prompt = 'Cuenca \"' + c.cuenca + '\". Capacidad: ' + c.capacidad_lmin + ' L/min. Demanda total pedida: ' + c.demanda_total_lmin + ' L/min.\\n'\n    + 'Caudal maximo por valvula: 4.2 L/min (apertura 100% = 4.2 L/min).\\n\\n'\n    + 'Posiciones de los agentes:\\n'\n    + c.agentes.map(a => '- Parcela ' + a.user_id + ': pidio ' + a.deseado_pct + '%, alerta ' + a.nivel_alerta + ', ' + a.dias_sin_intervencion + ' dias sin intervencion, credito equidad ' + a.credito + '. Dice: urgencia ' + a.bid.urgencia + ', cede hasta ' + a.bid.cedo_pct + '%, minimo ' + a.bid.pido_minimo_pct + '%. \"' + a.bid.mensaje + '\"').join('\\n')\n    + '\\n\\nDevolvé JSON:\\n{\\n  \"acuerdo\": \"2-4 frases en espanol explicando el reparto final y por que, para los agricultores\",\\n  \"reparto\": [ { \"user_id\": \"<uuid completo tal cual te lo di>\", \"asignado_pct\": number 0..100, \"credito_delta\": number, \"justificacion\": \"1 frase\" } ],\\n  \"transcripcion\": [ { \"agente\": \"<uuid o mediador>\", \"ronda\": number, \"mensaje\": \"...\" } ]\\n}\\nLa suma de asignado_pct*4.2/100 NO puede superar ' + c.capacidad_lmin + '.';\n  const body = { model: \"claude-sonnet-4-6\", max_tokens: 1100, system: sys, messages: [{ role: \"user\", content: prompt }] };\n  return { json: { cuenca: c.cuenca, capacidad_lmin: c.capacidad_lmin, demanda_total_lmin: c.demanda_total_lmin, agentes: c.agentes, body: JSON.stringify(body) } };\n});\n"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2200,
+    120
+   ],
+   "id": "Parsear-bids",
+   "name": "Parsear bids"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://api.anthropic.com/v1/messages",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "x-api-key",
+       "value": "__ANTHROPIC_API_KEY__"
+      },
+      {
+       "name": "anthropic-version",
+       "value": "2023-06-01"
+      },
+      {
+       "name": "content-type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ $json.body }}",
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    2420,
+    120
+   ],
+   "id": "Mediador",
+   "name": "Mediador"
+  },
+  {
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "\nconst resp = $input.all();\nconst ctx = $('Parsear bids').all().map(i => i.json);\nconst CAUDAL = 4.2;\nconst filas = [];\nconst negos = [];\nfor (let k = 0; k < resp.length; k++) {\n  const c = ctx[k];\n  const agentes = c.agentes;\n  let out = null;\n  try { const t = resp[k].json.content[0].text; out = JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)); } catch (e) { out = null; }\n  let reparto = (out && Array.isArray(out.reparto)) ? out.reparto : [];\n  if (reparto.length !== agentes.length) {\n    const pesos = agentes.map(a => Math.max(0.01, (a.bid && a.bid.urgencia != null ? a.bid.urgencia : 0.5) + Math.max(0, a.credito) * 0.05));\n    const sw = pesos.reduce((s, x) => s + x, 0);\n    reparto = agentes.map((a, i) => ({ user_id: a.user_id, asignado_pct: Math.min(a.deseado_pct, Math.round((pesos[i] / sw) * c.capacidad_lmin / CAUDAL * 100)), credito_delta: 0, justificacion: 'Reparto proporcional a urgencia (mediador sin respuesta valida).' }));\n  }\n  for (const a of agentes) {\n    const r = reparto.find(x => x.user_id === a.user_id) || {};\n    const asignado = Math.max(0, Math.min(100, Math.round(Number(r.asignado_pct != null ? r.asignado_pct : a.deseado_pct))));\n    const delta = Number(r.credito_delta != null ? r.credito_delta : 0);\n    filas.push({ id: a.id, user_id: a.user_id, cuenca: c.cuenca, deseado_pct: a.deseado_pct, asignado_pct: asignado, credito_nuevo: Math.round((a.credito + delta) * 100) / 100, motivo: ('Negociacion de cuenca: ' + (r.justificacion || (out && out.acuerdo) || 'reparto acordado')).slice(0, 400) });\n  }\n  negos.push({\n    cuenca: c.cuenca, capacidad_lmin: c.capacidad_lmin, demanda_total_lmin: c.demanda_total_lmin,\n    acuerdo: (out && out.acuerdo) || 'Reparto calculado por fallback proporcional (sin mediador).',\n    transcripcion: (out && out.transcripcion) || agentes.map(a => ({ agente: String(a.user_id).slice(0, 8), ronda: 1, mensaje: (a.bid && a.bid.mensaje) || '' })),\n    resultado: agentes.map(a => { const f = filas.find(x => x.user_id === a.user_id && x.cuenca === c.cuenca); const r = reparto.find(x => x.user_id === a.user_id) || {}; return { user_id: a.user_id, deseado_pct: a.deseado_pct, asignado_pct: f ? f.asignado_pct : a.deseado_pct, credito: f ? f.credito_nuevo : a.credito, justificacion: r.justificacion || '' }; }),\n  });\n}\nreturn filas.map(f => ({ json: { ...f, _negos: negos } }));\n"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2640,
+    120
+   ],
+   "id": "Aplicar-acuerdo",
+   "name": "Aplicar acuerdo"
+  },
+  {
+   "parameters": {
+    "method": "PATCH",
+    "url": "=https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/RedParcelas?id=eq.{{ $json.id }}",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ porcentaje_apertura_asignado: $json.asignado_pct, motivo_asignacion: $json.motivo }) }}",
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    2860,
+    120
+   ],
+   "id": "Guardar-RedParcelas",
+   "name": "Guardar RedParcelas"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/EquidadCuenca?on_conflict=user_id,cuenca",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      },
+      {
+       "name": "Prefer",
+       "value": "resolution=merge-duplicates"
+      }
+     ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ user_id: $json.user_id, cuenca: $json.cuenca, credito: $json.credito_nuevo, updated_at: new Date().toISOString() }) }}",
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    3080,
+    120
+   ],
+   "id": "Guardar-equidad",
+   "name": "Guardar equidad"
+  },
+  {
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "\nconst negos = ($input.first().json._negos) || [];\nreturn negos.map(n => ({ json: {\n  cuenca: n.cuenca, capacidad_lmin: n.capacidad_lmin, demanda_total_lmin: n.demanda_total_lmin,\n  acuerdo: n.acuerdo,\n  transcripcion: n.transcripcion,\n  resultado: n.resultado,\n} }));\n"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    3300,
+    40
+   ],
+   "id": "Expandir-negociaciones",
+   "name": "Expandir negociaciones"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/NegociacionCuenca",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ cuenca: $json.cuenca, capacidad_lmin: $json.capacidad_lmin, demanda_total_lmin: $json.demanda_total_lmin, acuerdo: $json.acuerdo, transcripcion: $json.transcripcion, resultado: $json.resultado }) }}",
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    3520,
+    40
+   ],
+   "id": "Guardar-negociacion",
+   "name": "Guardar negociacion"
+  },
+  {
+   "parameters": {
+    "url": "=https://facjhtaljvpaadckwxlq.supabase.co/rest/v1/ParcelaConfig?user_id=eq.{{ $json.user_id }}&select=tiene_actuador,actuador_url,actuador_token",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "apikey",
+       "value": "__SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Authorization",
+       "value": "Bearer __SUPABASE_SERVICE_ROLE_KEY__"
+      },
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      }
+     ]
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    2840,
+    300
+   ],
+   "id": "Leer-config-actuador",
+   "name": "Leer config actuador",
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "strict",
+      "version": 3
+     },
+     "conditions": [
+      {
+       "id": "c-act",
+       "leftValue": "={{ !!($json.tiene_actuador && $json.actuador_url) }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2.3,
+   "position": [
+    3060,
+    300
+   ],
+   "id": "If-actuador",
+   "name": "If actuador"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "={{ $json.actuador_url }}",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "Content-Type",
+       "value": "application/json"
+      },
+      {
+       "name": "X-Actuador-Token",
+       "value": "={{ $json.actuador_token || '' }}"
+      }
+     ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ source: 'agrosentinel', cuenca: $json.cuenca, valve_pct: $json.asignado_pct }) }}",
+    "options": {}
+   },
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.5,
+   "position": [
+    3280,
+    300
+   ],
+   "id": "Llamar-actuador",
+   "name": "Llamar actuador",
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "\nreturn $input.all().map(i => { const j = i.json; return { json: { user_id: j.user_id, cuenca: j.cuenca, asignado_pct: j.asignado_pct } }; });\n"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2400,
+    300
+   ],
+   "id": "Marcar-actuador",
+   "name": "Marcar actuador"
+  },
+  {
+   "parameters": {
+    "mode": "runOnceForAllItems",
+    "jsCode": "\nconst cfgItems = $input.all();\nconst prev = $('Marcar actuador').all().map(i => i.json);\nconst out = [];\nfor (let k = 0; k < cfgItems.length; k++) {\n  const raw = cfgItems[k].json;\n  const fila = Array.isArray(raw) ? raw[0] : (raw && Object.keys(raw).length ? raw : null);\n  const p = prev[k] || {};\n  out.push({ json: {\n    user_id: p.user_id, cuenca: p.cuenca, asignado_pct: p.asignado_pct,\n    tiene_actuador: fila ? !!fila.tiene_actuador : false,\n    actuador_url: fila ? (fila.actuador_url || '') : '',\n    actuador_token: fila ? (fila.actuador_token || '') : '',\n  } });\n}\nreturn out;\n"
+   },
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2620,
+    300
+   ],
+   "id": "Fusionar-config",
+   "name": "Fusionar config"
+  }
+ ],
+ "connections": {
+  "Schedule Trigger": {
+   "main": [
+    [
+     {
+      "node": "Leer parcelas",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Leer parcelas": {
+   "main": [
+    [
+     {
+      "node": "Leer cuencas",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Leer cuencas": {
+   "main": [
+    [
+     {
+      "node": "Leer equidad",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Leer equidad": {
+   "main": [
+    [
+     {
+      "node": "Preparar plan",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Preparar plan": {
+   "main": [
+    [
+     {
+      "node": "If necesita negociacion",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "If necesita negociacion": {
+   "main": [
+    [
+     {
+      "node": "Prompt bid",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "Sin conflicto",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Sin conflicto": {
+   "main": [
+    [
+     {
+      "node": "Guardar sin conflicto",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Guardar sin conflicto": {
+   "main": [
+    [
+     {
+      "node": "Marcar actuador",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Prompt bid": {
+   "main": [
+    [
+     {
+      "node": "Bid agente",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Bid agente": {
+   "main": [
+    [
+     {
+      "node": "Parsear bids",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Parsear bids": {
+   "main": [
+    [
+     {
+      "node": "Mediador",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Mediador": {
+   "main": [
+    [
+     {
+      "node": "Aplicar acuerdo",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Aplicar acuerdo": {
+   "main": [
+    [
+     {
+      "node": "Guardar RedParcelas",
+      "type": "main",
+      "index": 0
+     },
+     {
+      "node": "Expandir negociaciones",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Guardar RedParcelas": {
+   "main": [
+    [
+     {
+      "node": "Guardar equidad",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Guardar equidad": {
+   "main": [
+    [
+     {
+      "node": "Marcar actuador",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Expandir negociaciones": {
+   "main": [
+    [
+     {
+      "node": "Guardar negociacion",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Marcar actuador": {
+   "main": [
+    [
+     {
+      "node": "Leer config actuador",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Leer config actuador": {
+   "main": [
+    [
+     {
+      "node": "Fusionar config",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "Fusionar config": {
+   "main": [
+    [
+     {
+      "node": "If actuador",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "If actuador": {
+   "main": [
+    [
+     {
+      "node": "Llamar actuador",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    []
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1"
+ }
+}

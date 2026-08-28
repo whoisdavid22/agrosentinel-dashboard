@@ -10,7 +10,7 @@ import {
   SHARED_SHARE_URL,
 } from '../lib/constants';
 import { calcularFAO56Local, computePredictions, type Predictions } from '../lib/faoCalc';
-import type { CurrentData, DecisionResponse, LogEntry, FetchErrorInfo, ImageZone, Calibracion, AsignacionRed, RedComparativa, TelegramVinculo } from '../lib/types';
+import type { CurrentData, DecisionResponse, LogEntry, FetchErrorInfo, ImageZone, Calibracion, AsignacionRed, RedComparativa, NegociacionCuenca, ParcelaConfig, TelegramVinculo } from '../lib/types';
 import type { User } from '@supabase/supabase-js';
 import { t, type Lang } from '../lib/translations';
 
@@ -118,6 +118,11 @@ export function useDashboard() {
   const [calibracion, setCalibracion] = useState<Calibracion | null>(null);
   const [asignacionRed, setAsignacionRed] = useState<AsignacionRed | null>(null);
   const [comparativaRed, setComparativaRed] = useState<RedComparativa | null>(null);
+  const [negociacion, setNegociacion] = useState<NegociacionCuenca | null>(null);
+  const [parcelaConfig, setParcelaConfig] = useState<ParcelaConfig | null>(null);
+  const parcelaConfigRef = useRef<ParcelaConfig | null>(null);
+  parcelaConfigRef.current = parcelaConfig;
+  const [actuadorStatus, setActuadorStatus] = useState('');
   const [redCuenca, setRedCuenca] = useState('');
   const [redShareStatus, setRedShareStatus] = useState('');
 
@@ -321,6 +326,95 @@ export function useDashboard() {
     cargarComparativaRed();
   }, [cargarComparativaRed]);
 
+  // ---- Negociación peer-to-peer de la cuenca (agentes de parcela) ----
+  const cargarNegociacion = useCallback(async () => {
+    if (!user) {
+      setNegociacion(null);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.rpc('negociacion_cuenca_ultima');
+      if (error) throw error;
+      const fila = Array.isArray(data) ? (data[0] as NegociacionCuenca | undefined) : (data as NegociacionCuenca | null);
+      setNegociacion(fila ?? null);
+    } catch {
+      setNegociacion(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    cargarNegociacion();
+  }, [cargarNegociacion]);
+
+  // ---- Config de actuador físico (opcional; sin actuador el dashboard funciona igual) ----
+  const cargarParcelaConfig = useCallback(async () => {
+    if (!user) {
+      setParcelaConfig(null);
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('ParcelaConfig')
+        .select('tiene_actuador,actuador_url,actuador_token')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (error) throw error;
+      setParcelaConfig(
+        data
+          ? { tiene_actuador: !!data.tiene_actuador, actuador_url: data.actuador_url ?? '', actuador_token: data.actuador_token ?? '' }
+          : { tiene_actuador: false, actuador_url: '', actuador_token: '' },
+      );
+    } catch {
+      setParcelaConfig(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    cargarParcelaConfig();
+  }, [cargarParcelaConfig]);
+
+  const guardarParcelaConfig = useCallback(
+    async (cfg: ParcelaConfig) => {
+      if (!user) return;
+      setParcelaConfig(cfg);
+      try {
+        const { error } = await supabase.from('ParcelaConfig').upsert({
+          user_id: user.id,
+          tiene_actuador: cfg.tiene_actuador,
+          actuador_url: cfg.actuador_url || null,
+          actuador_token: cfg.actuador_token || null,
+          updated_at: new Date().toISOString(),
+        });
+        if (error) throw error;
+        setActuadorStatus(t(lang, 'actuador.saved'));
+      } catch {
+        setActuadorStatus(t(lang, 'actuador.saveFailed'));
+      }
+    },
+    [user, lang],
+  );
+
+  // Envía la apertura objetivo al actuador físico del usuario (si lo configuró).
+  const ejecutarActuador = useCallback(
+    async (valvePct: number, motivo: string) => {
+      const cfg = parcelaConfigRef.current;
+      if (!cfg || !cfg.tiene_actuador || !cfg.actuador_url) return;
+      setActuadorStatus(t(lang, 'actuador.sending'));
+      try {
+        const res = await fetch(cfg.actuador_url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Actuador-Token': cfg.actuador_token || '' },
+          body: JSON.stringify({ source: 'agrosentinel', valve_pct: valvePct, motivo }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        setActuadorStatus(t(lang, 'actuador.ok', valvePct));
+      } catch {
+        setActuadorStatus(t(lang, 'actuador.failed'));
+      }
+    },
+    [lang],
+  );
+
   const compartirConRed = useCallback(
     async (cuenca: string) => {
       if (!user) {
@@ -362,11 +456,12 @@ export function useDashboard() {
         setRedShareStatus(t(lang, 'red.shared'));
         cargarAsignacionRed();
         cargarComparativaRed();
+        cargarNegociacion();
       } catch {
         setRedShareStatus(t(lang, 'red.shareFailed'));
       }
     },
-    [user, lang, offline, lastResponse, cargarAsignacionRed, cargarComparativaRed],
+    [user, lang, offline, lastResponse, cargarAsignacionRed, cargarComparativaRed, cargarNegociacion],
   );
 
   // ---- Vinculación de Telegram: liga el chat_id del bot a este usuario ----
@@ -502,6 +597,12 @@ export function useDashboard() {
 
       scheduleFailsafe(data.valvula);
       cargarCalibracion();
+
+      // Actuador físico (opcional): si el usuario tiene uno conectado, el agente
+      // ajusta la válvula de verdad; si no, la recomendación queda para hacerla a mano.
+      const aperturaObjetivo =
+        data.porcentaje_apertura ?? (data.valvula === 'ABIERTA' ? 100 : 0);
+      void ejecutarActuador(aperturaObjetivo, data.accion || '');
     } catch (err) {
       clearTimeout(timeoutId);
       const info: FetchErrorInfo =
@@ -514,7 +615,7 @@ export function useDashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, lang, user, decisionesHistorial, addLogEntry, guardarLecturaSupabase, updateCharts, scheduleFailsafe, runOfflineFallback, cargarCalibracion]);
+  }, [isLoading, lang, user, decisionesHistorial, addLogEntry, guardarLecturaSupabase, updateCharts, scheduleFailsafe, runOfflineFallback, cargarCalibracion, ejecutarActuador]);
 
   // ---- Auto polling ----
   useEffect(() => {
@@ -733,6 +834,11 @@ export function useDashboard() {
     asignacionRed,
     cargarAsignacionRed,
     comparativaRed,
+    negociacion,
+    cargarNegociacion,
+    parcelaConfig,
+    guardarParcelaConfig,
+    actuadorStatus,
     compartirConRed,
     redCuenca,
     setRedCuenca,

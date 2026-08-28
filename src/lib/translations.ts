@@ -215,6 +215,37 @@ const dict = {
     'red.compare.humidity': (mine: number, theirs: number) =>
       `Humedad de suelo — tu parcela: ${mine}% · promedio de la cuenca: ${theirs}%.`,
 
+    // Negociación peer-to-peer de la cuenca
+    'nego.title': 'Negociación de la cuenca',
+    'nego.intro': 'Cuando el agua compartida no alcanza para todos, cada parcela corre su propio agente. Los agentes negocian entre sí y un mediador imparcial cierra el reparto, respetando la urgencia real y la memoria de equidad entre días.',
+    'nego.none': 'Todavía no hubo una negociación en tu cuenca. Ocurre automáticamente cuando la demanda total supera la capacidad de la fuente.',
+    'nego.when': (fecha: string) => `Última ronda: ${fecha}`,
+    'nego.capacity': (cap: number, dem: number) => `Capacidad de la cuenca: ${cap} L/min · demanda total pedida: ${dem} L/min`,
+    'nego.agreement': 'Acuerdo',
+    'nego.result': 'Reparto final',
+    'nego.yours': 'Tu parcela',
+    'nego.requested': 'Pedido',
+    'nego.assigned': 'Asignado',
+    'nego.credit': 'Crédito de equidad',
+    'nego.creditHint': 'Positivo: cediste agua y tenés prioridad la próxima. Negativo: recibiste de más y te toca ceder.',
+    'nego.transcript': 'Ver la negociación',
+    'nego.round': (n: number) => `Ronda ${n}`,
+    'nego.mediator': 'Mediador',
+
+    // Actuador físico (opcional)
+    'actuador.title': 'Actuador físico (opcional)',
+    'actuador.intro': 'Si tenés una válvula motorizada conectada a Internet, el agente puede ajustarla solo. Sin actuador, el dashboard funciona igual y la recomendación queda para hacerla a mano.',
+    'actuador.toggle': 'Tengo un actuador físico conectado',
+    'actuador.url': 'URL del actuador (endpoint que recibe POST)',
+    'actuador.token': 'Token del actuador (se envía como X-Actuador-Token)',
+    'actuador.save': 'Guardar configuración',
+    'actuador.saved': 'Configuración de actuador guardada.',
+    'actuador.saveFailed': 'No se pudo guardar la configuración del actuador.',
+    'actuador.sending': 'Enviando la orden al actuador…',
+    'actuador.ok': (pct: number) => `Válvula ajustada automáticamente al ${pct}% por el agente.`,
+    'actuador.failed': 'No se pudo contactar el actuador. Ajustá la válvula a mano.',
+    'actuador.manual': 'Modo manual: seguí la recomendación del agente ajustando la válvula vos.',
+
     // Vinculación de Telegram
     'telegram.intro': 'Vinculá tu cuenta con el bot de Telegram para poder reportar lecturas nuevas y consultar el estado de tu parcela por chat, con tus propios datos.',
     'telegram.botHandle': 'Bot: @AgroSentinelbot',
@@ -483,6 +514,37 @@ const dict = {
       `Your plot is asking for essentially the same as your watershed average (${avg}%, ${n} neighboring plot${n !== 1 ? 's' : ''}).`,
     'red.compare.humidity': (mine: number, theirs: number) =>
       `Soil moisture — your plot: ${mine}% · watershed average: ${theirs}%.`,
+
+    // Peer-to-peer watershed negotiation
+    'nego.title': 'Watershed negotiation',
+    'nego.intro': 'When the shared water is not enough for everyone, each plot runs its own agent. The agents negotiate with each other and an impartial mediator settles the split, honoring real urgency and the fairness memory across days.',
+    'nego.none': 'No negotiation has happened in your watershed yet. It runs automatically when total demand exceeds the source capacity.',
+    'nego.when': (fecha: string) => `Last round: ${fecha}`,
+    'nego.capacity': (cap: number, dem: number) => `Watershed capacity: ${cap} L/min · total requested demand: ${dem} L/min`,
+    'nego.agreement': 'Agreement',
+    'nego.result': 'Final split',
+    'nego.yours': 'Your plot',
+    'nego.requested': 'Requested',
+    'nego.assigned': 'Assigned',
+    'nego.credit': 'Fairness credit',
+    'nego.creditHint': 'Positive: you gave up water and get priority next time. Negative: you received extra and yield first.',
+    'nego.transcript': 'View the negotiation',
+    'nego.round': (n: number) => `Round ${n}`,
+    'nego.mediator': 'Mediator',
+
+    // Physical actuator (optional)
+    'actuador.title': 'Physical actuator (optional)',
+    'actuador.intro': 'If you have an internet-connected motorized valve, the agent can adjust it itself. Without an actuator the dashboard works the same and the recommendation is left for you to apply by hand.',
+    'actuador.toggle': 'I have a physical actuator connected',
+    'actuador.url': 'Actuator URL (endpoint that receives POST)',
+    'actuador.token': 'Actuator token (sent as X-Actuador-Token)',
+    'actuador.save': 'Save configuration',
+    'actuador.saved': 'Actuator configuration saved.',
+    'actuador.saveFailed': 'Could not save the actuator configuration.',
+    'actuador.sending': 'Sending the command to the actuator…',
+    'actuador.ok': (pct: number) => `Valve automatically set to ${pct}% by the agent.`,
+    'actuador.failed': 'Could not reach the actuator. Adjust the valve by hand.',
+    'actuador.manual': 'Manual mode: follow the agent recommendation by adjusting the valve yourself.',
 
     // Telegram account linking
     'telegram.intro': 'Link your account with the Telegram bot to report new readings and check your parcel status by chat, using your own data.',
